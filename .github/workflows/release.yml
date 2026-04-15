@@ -15,8 +15,6 @@ jobs:
         include:
           - os: macos-latest
             asset-name: bssync-macos-arm64
-          - os: macos-13
-            asset-name: bssync-macos-x86_64
           - os: ubuntu-latest
             asset-name: bssync-linux-x86_64
 

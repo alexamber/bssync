@@ -8,26 +8,24 @@ Edit docs in your editor, push to BookStack. Edit in BookStack's WYSIWYG, pull b
 
 ## Install
 
-Pick the option that fits you:
-
-```bash
-# Recommended — isolated install, no Python knowledge required after install
-pipx install bssync
-
-# Or plain pip
-pip install bssync
-
-# Or install from GitHub (pre-PyPI / development)
-pipx install git+https://github.com/alexamber/bssync.git
-```
-
-For users without Python, pre-built binaries are attached to each [GitHub Release](https://github.com/alexamber/bssync/releases):
+**No Python needed** — download the pre-built binary from [GitHub Releases](https://github.com/alexamber/bssync/releases):
 
 ```bash
 # macOS arm64
 curl -L https://github.com/alexamber/bssync/releases/latest/download/bssync-macos-arm64 -o /usr/local/bin/bssync
 chmod +x /usr/local/bin/bssync
 ```
+
+**With Python:**
+
+```bash
+pip install bssync
+# or direct from GitHub (pre-PyPI):
+pip install git+https://github.com/alexamber/bssync.git
+```
+
+If `pip install` errors with `externally-managed-environment` (common on Homebrew
+Python), either use a venv or install via `pipx install bssync` instead.
 
 After install, `bssync` is on your PATH.
 

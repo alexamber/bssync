@@ -65,7 +65,7 @@ Lightweight ADRs for decisions that shape bssync's design. Each entry explains t
 
 **Decision:** `pyyaml` and `requests`. No more without strong justification.
 
-**Why:** CLI tools that pull in dozens of deps are fragile to install, slow to start, and hard to audit for security. Users install bssync via `pipx` or `pip` — every dep they get is a dep they have to trust.
+**Why:** CLI tools that pull in dozens of deps are fragile to install, slow to start, and hard to audit for security. Users install bssync via `pip` — every dep they get is a dep they have to trust.
 
 **Consequence:** No rich terminal formatting (rich), no fancy argument parsing (click/typer), no dataclass serialization (pydantic). Plain prints and argparse are fine.
 
@@ -102,7 +102,7 @@ Lightweight ADRs for decisions that shape bssync's design. Each entry explains t
 ## 10. Entry-point binary, PyInstaller for releases
 
 **Decision:**
-- For Python users: `pipx install bssync` wires up a `bssync` command via `[project.scripts]` in `pyproject.toml`.
+- For Python users: `pip install bssync` wires up a `bssync` command via `[project.scripts]` in `pyproject.toml`.
 - For users without Python: GitHub Release includes PyInstaller-built single-file binaries for macOS and Linux.
 
 **Why:** Python users expect pip-based installs. Non-Python users expect "download a binary and run it." Both audiences exist. PyInstaller binaries are larger (~15MB) but require zero dependencies on the target machine.
