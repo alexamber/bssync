@@ -1,0 +1,51 @@
+# bssync config
+# Copy this file to `bookstack.yaml` and edit with your values.
+# The real `bookstack.yaml` is gitignored — never commit it.
+#
+# Quick setup: run `bssync init` for an interactive walkthrough.
+
+bookstack:
+  url: https://docs.example.com
+
+  # API credentials — set here or via environment variables:
+  #   BOOKSTACK_TOKEN_ID=xxx BOOKSTACK_TOKEN_SECRET=yyy
+  # To create a token in BookStack:
+  #   Profile → Edit Profile → API Tokens → Create Token
+  token_id: ""
+  token_secret: ""
+
+
+# ─── Publishing map ───
+# Each entry maps a local markdown file to a BookStack location.
+# Books and chapters are created automatically if they don't exist.
+#
+# Fields:
+#   file:        Path to markdown file (relative to this config file, or absolute)
+#   book:        BookStack book name (required)
+#   chapter:     BookStack chapter name (optional — page goes in book if omitted)
+#   title:       Page title (optional — defaults to first H1 heading, then filename)
+#   strip_title: Remove H1 from content body (default: true — BookStack shows page
+#                name as title)
+#   attachments: List of file paths to upload as page sidebar attachments
+#
+# Images:
+#   Local images referenced via `![alt](path)` are auto-uploaded to BookStack's
+#   gallery and embedded inline. Supported: png, jpg, jpeg, gif, webp, svg, bmp.
+#
+# Attachments:
+#   Files listed under `attachments:` are uploaded as sidebar downloads.
+#   Inline links like `[text](local/file.ext)` are also auto-uploaded as
+#   attachments and rewritten to BookStack download URLs.
+
+publish:
+  - file: docs/getting-started.md
+    book: Documentation
+    chapter: Guides
+    title: Getting Started
+
+  # - file: docs/architecture.md
+  #   book: Documentation
+  #   chapter: Design
+  #   title: Architecture Overview
+  #   attachments:
+  #     - assets/architecture-diagram.svg

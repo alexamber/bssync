@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-binaries:
+    name: Build binary (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            asset-name: bssync-macos-arm64
+          - os: macos-13
+            asset-name: bssync-macos-x86_64
+          - os: ubuntu-latest
+            asset-name: bssync-linux-x86_64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install with build deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[build]"
+
+      - name: Build single-file binary
+        run: |
+          pyinstaller --onefile --name bssync \
+            --hidden-import bssync.init \
+            --hidden-import bssync.discovery \
+            --hidden-import bssync.sync \
+            src/bssync/__main__.py
+          mv dist/bssync dist/${{ matrix.asset-name }}
+
+      - name: Smoke test binary
+        run: ./dist/${{ matrix.asset-name }} --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset-name }}
+          path: dist/${{ matrix.asset-name }}
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          gh release create "$VERSION" \
+            --title "bssync $VERSION" \
+            --notes "See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for release notes." \
+            artifacts/*/bssync-*

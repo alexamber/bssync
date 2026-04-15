@@ -1,0 +1,53 @@
+# ─── Credentials — never commit any of these ───
+bookstack.yaml
+bssync.yaml
+*.local.yaml
+*.secrets.yaml
+.env
+.env.*
+!.env.example
+
+# ─── Python ───
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+MANIFEST
+
+# ─── Testing ───
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+coverage.xml
+
+# ─── Virtualenvs ───
+.venv/
+venv/
+env/
+
+# ─── PyInstaller ───
+*.spec.bak
+*.manifest
+pyinstaller-build/
+
+# ─── Editors / OS ───
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ─── Local bssync state (shouldn't exist — tool is stateless locally — but just in case) ───
+.bssync/
+.booksync/
