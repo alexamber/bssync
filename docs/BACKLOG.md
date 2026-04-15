@@ -15,8 +15,11 @@ Ideas, known issues, and planned features. Not prioritized.
 - [ ] **PyPI publication** — pick a final package name (`bssync` if available, else `bookstack-sync`), register, configure `release.yml` to publish
 - [ ] **Better error messages** — when API returns 403/404/validation errors, translate to human-readable guidance
 - [ ] **`bssync status`** — like `git status`: show what would push / pull without actually doing it
+- [ ] **Interactive `pull --new`** — instead of printing YAML snippets to copy-paste, prompt per untracked page and auto-append to the config. Options per page: `[y] add & pull` / `[e] edit path` / `[s] skip` / `[a] accept all remaining` / `[q] quit`. Must use append-only writes to preserve comments and formatting in the user's config (no ruamel.yaml roundtrip).
+- [ ] **`bssync add <file>`** — single-file interactive add: detect H1 as title, prompt for book/chapter, append to config, optionally push immediately. Solves "I just wrote a local doc, track it now" without manual YAML editing.
 
 ### Medium priority
+- [ ] **`bssync scan <dir> --book X`** — bulk-add from a directory: walk for `.md` files, extract H1s as titles, prompt to add all or pick individually. Needs clear policy for book/chapter inference (probably require `--book`, use subdirectories as chapter hint). Design tradeoff: directory-to-chapter mapping conventions vary per repo — may be better to keep it manual via repeated `bssync add`.
 - [ ] **`bssync watch`** — auto-push on local file save (useful for live preview)
 - [ ] **Shelves support** — BookStack has a shelf abstraction above books; config could target shelves
 - [ ] **Per-entry `direction: push|pull|both`** — some entries are push-only (authored locally), some pull-only (edited on BookStack by non-devs), some bidirectional
