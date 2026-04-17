@@ -11,6 +11,8 @@ from typing import Optional
 
 import requests
 
+from bssync import term
+
 
 class BookStackClient:
     """Thin wrapper over the BookStack HTTP API.
@@ -48,8 +50,8 @@ class BookStackClient:
         resp = requests.request(method, url, headers=self.headers,
                                 json=data, timeout=30)
         if resp.status_code >= 400:
-            print(f"  ERROR: {method} {url} -> {resp.status_code}")
-            print(f"  {resp.text[:500]}")
+            print(f"  {term.err('ERROR')}: {method} {url} -> {resp.status_code}")
+            print(term.dim(f"  {resp.text[:500]}"))
             raise RuntimeError(f"BookStack API error: {resp.status_code}")
         return resp.json() if resp.text else {}
 
@@ -62,8 +64,8 @@ class BookStackClient:
         resp = requests.request(method, url, headers=headers,
                                 data=data, files=files, timeout=60)
         if resp.status_code >= 400:
-            print(f"  ERROR: {method} {url} -> {resp.status_code}")
-            print(f"  {resp.text[:500]}")
+            print(f"  {term.err('ERROR')}: {method} {url} -> {resp.status_code}")
+            print(term.dim(f"  {resp.text[:500]}"))
             raise RuntimeError(f"BookStack API error: {resp.status_code}")
         return resp.json() if resp.text else {}
 

@@ -8,6 +8,7 @@ against the current remote content's hash to detect external edits.
 import difflib
 import sys
 
+from bssync import term
 from bssync.client import BookStackClient
 from bssync.content import normalize_markdown
 
@@ -40,12 +41,22 @@ def print_unified_diff(old: str, new: str, from_label: str, to_label: str,
     diff = list(difflib.unified_diff(
         old_lines, new_lines, fromfile=from_label, tofile=to_label, n=3))
     if not diff:
-        print("    (no textual diff — only whitespace or normalization)")
+        print(term.dim("    (no textual diff — only whitespace or normalization)"))
         return
     for line in diff[:max_lines]:
-        print(f"    {line.rstrip()}")
+        text = line.rstrip()
+        if text.startswith("+++") or text.startswith("---"):
+            print(f"    {term.bold(text)}")
+        elif text.startswith("@@"):
+            print(f"    {term.info(text)}")
+        elif text.startswith("+"):
+            print(f"    {term.ok(text)}")
+        elif text.startswith("-"):
+            print(f"    {term.err(text)}")
+        else:
+            print(f"    {text}")
     if len(diff) > max_lines:
-        print(f"    ... ({len(diff) - max_lines} more lines)")
+        print(term.dim(f"    ... ({len(diff) - max_lines} more lines)"))
 
 
 # ─── Interactive prompts ───
@@ -62,9 +73,10 @@ def prompt_conflict_action(title: str, remote_md: str, local_md: str,
 
     Returns one of: 'overwrite', 'skip', 'pull', 'quit'.
     """
-    print(f"  \u26a0 CONFLICT: \"{title}\" modified on BookStack since last "
-          f"publish")
-    print(f"    Remote diff vs last sync: +{added} / -{removed} lines")
+    print(f"  {term.warn(term.bold('⚠ CONFLICT'))}: \"{title}\" modified on "
+          f"BookStack since last publish")
+    print(f"    Remote diff vs last sync: "
+          f"{term.ok(f'+{added}')} / {term.err(f'-{removed}')} lines")
     while True:
         print("    [o] overwrite remote   [s] skip   [d] show diff   "
               "[p] pull remote first   [q] quit")
@@ -93,7 +105,8 @@ def prompt_pull_overwrite(title: str, local_md: str, remote_md: str,
 
     Returns one of: 'overwrite', 'skip', 'quit'.
     """
-    print(f"  Remote changes for \"{title}\": +{added} / -{removed} lines")
+    print(f"  Remote changes for \"{title}\": "
+          f"{term.ok(f'+{added}')} / {term.err(f'-{removed}')} lines")
     while True:
         print("    [y] overwrite local   [n] skip   [d] show diff   [q] quit")
         try:

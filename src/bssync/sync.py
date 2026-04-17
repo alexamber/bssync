@@ -11,6 +11,7 @@ local file, diffing and prompting on conflicts.
 import sys
 from pathlib import Path
 
+from bssync import term
 from bssync.client import BookStackClient
 from bssync.config import resolve_file_path
 from bssync.conflict import (
@@ -49,7 +50,7 @@ def publish_entry(client: BookStackClient, entry: dict, config_dir: Path,
     """
     file_path = resolve_file_path(entry["file"], config_dir)
     if not file_path.exists():
-        print(f"  SKIP: file not found: {file_path}")
+        print(f"  {term.warn('SKIP')}: file not found: {file_path}")
         return False
 
     content = read_markdown(file_path)
@@ -134,17 +135,18 @@ def _update_existing(client, entry, file_path, content, title, existing,
             and last_sync_hash != current_remote_hash):
         added, removed = diff_summary(content, remote_markdown)
         if not is_interactive():
-            print(f"  CONFLICT: \"{title}\" was modified on BookStack "
-                  f"since last publish (+{added}/-{removed} lines). "
+            print(f"  {term.warn('CONFLICT')}: \"{title}\" was modified on "
+                  f"BookStack since last publish "
+                  f"({term.ok(f'+{added}')}/{term.err(f'-{removed}')} lines). "
                   f"Use --force to overwrite.")
             return False
         action = prompt_conflict_action(
             title, remote_markdown, content, added, removed)
         if action == "skip":
-            print(f"  SKIPPED: {title}")
+            print(f"  {term.warn('SKIPPED')}: {title}")
             return False
         if action == "quit":
-            print("Aborted by user.")
+            print(term.err("Aborted by user."))
             sys.exit(1)
         if action == "pull":
             local_form = (restore_h1(remote_markdown, title)
@@ -153,7 +155,7 @@ def _update_existing(client, entry, file_path, content, title, existing,
             _write_pulled_content(file_path, local_form)
             set_sync_tag(client, page_detail, current_remote_hash,
                          source_file=str(entry["file"]))
-            print(f"  PULLED: {title} → {file_path}")
+            print(f"  {term.ok('PULLED')}: {title} → {file_path}")
             return True
         # action == "overwrite" — proceed with push
 
@@ -177,7 +179,7 @@ def _update_existing(client, entry, file_path, content, title, existing,
 
     local_normalized_hash = normalized_hash(content)
     if last_sync_hash == current_remote_hash == local_normalized_hash:
-        print(f"  UNCHANGED: {title}")
+        print(f"  {term.dim('UNCHANGED')}: {title}")
         return False
 
     tags = [
@@ -188,11 +190,12 @@ def _update_existing(client, entry, file_path, content, title, existing,
 
     if show_diff and not client.dry_run and remote_markdown:
         added, removed = diff_summary(remote_markdown, content)
-        print(f"  DIFF: {title}: +{added} / -{removed} lines")
+        print(f"  {term.info('DIFF')}: {title}: "
+              f"{term.ok(f'+{added}')} / {term.err(f'-{removed}')} lines")
 
     resp = client.update_page(page_id, title, content, tags=tags)
     _reconcile_stored_hash(client, resp, local_normalized_hash, tags)
-    print(f"  UPDATED: {title} (page {page_id})")
+    print(f"  {term.ok('UPDATED')}: {title} (page {page_id})")
     return True
 
 
@@ -244,7 +247,7 @@ def _create_new(client, entry, content, title, book_id, chapter_id,
 
         _reconcile_stored_hash(client, resp, local_hash, tags)
 
-    print(f"  CREATED: {title} (page {page_id})")
+    print(f"  {term.ok('CREATED')}: {title} (page {page_id})")
     return True
 
 
@@ -284,7 +287,7 @@ def pull_entry(client: BookStackClient, entry: dict, config_dir: Path) -> bool:
     book_name = entry.get("book", "Documentation")
     book = client.find_book(book_name)
     if not book:
-        print(f"  SKIP: book '{book_name}' not found on BookStack")
+        print(f"  {term.warn('SKIP')}: book '{book_name}' not found on BookStack")
         return False
 
     # Determine title — config override, then local H1, then filename
@@ -296,14 +299,16 @@ def pull_entry(client: BookStackClient, entry: dict, config_dir: Path) -> bool:
 
     page = client.find_page_in_book(book["id"], title)
     if not page:
-        print(f"  SKIP: page '{title}' not found in book '{book_name}'")
+        print(f"  {term.warn('SKIP')}: page '{title}' not found in book "
+              f"'{book_name}'")
         return False
 
     page_detail = client.get_page(page["id"])
     remote_markdown = page_detail.get("markdown", "")
     if not remote_markdown:
-        print(f"  SKIP: page '{title}' has empty markdown (may have been "
-              f"edited in BookStack's WYSIWYG editor — only HTML stored)")
+        print(f"  {term.warn('SKIP')}: page '{title}' has empty markdown "
+              f"(may have been edited in BookStack's WYSIWYG editor — only "
+              f"HTML stored)")
         return False
 
     # Remote hash is computed on what BookStack actually stores (no H1)
@@ -316,36 +321,39 @@ def pull_entry(client: BookStackClient, entry: dict, config_dir: Path) -> bool:
     local_content = read_markdown(file_path) if file_path.exists() else ""
 
     if normalized_hash(local_form) == normalized_hash(local_content):
-        print(f"  UNCHANGED: {title}")
+        print(f"  {term.dim('UNCHANGED')}: {title}")
         return False
 
     added, removed = diff_summary(local_content, local_form)
 
     if not file_path.exists():
         _write_pulled_content(file_path, local_form)
-        print(f"  CREATED: {title} → {file_path} (+{added} lines)")
+        print(f"  {term.ok('CREATED')}: {title} → {file_path} "
+              f"({term.ok(f'+{added}')} lines)")
         set_sync_tag(client, page_detail, remote_hash,
                      source_file=str(entry["file"]))
         return True
 
     if not is_interactive():
-        print(f"  DIFFERS: \"{title}\" differs from remote "
-              f"(+{added}/-{removed}). Run interactively to overwrite.")
+        print(f"  {term.warn('DIFFERS')}: \"{title}\" differs from remote "
+              f"({term.ok(f'+{added}')}/{term.err(f'-{removed}')}). "
+              f"Run interactively to overwrite.")
         return False
 
     action = prompt_pull_overwrite(title, local_content, local_form,
                                    added, removed)
     if action == "skip":
-        print(f"  SKIPPED: {title}")
+        print(f"  {term.warn('SKIPPED')}: {title}")
         return False
     if action == "quit":
-        print("Aborted by user.")
+        print(term.err("Aborted by user."))
         sys.exit(1)
 
     _write_pulled_content(file_path, local_form)
     set_sync_tag(client, page_detail, remote_hash,
                  source_file=str(entry["file"]))
-    print(f"  UPDATED: {title} → {file_path} (+{added}/-{removed})")
+    print(f"  {term.ok('UPDATED')}: {title} → {file_path} "
+          f"({term.ok(f'+{added}')}/{term.err(f'-{removed}')})")
     return True
 
 

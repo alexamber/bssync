@@ -1,23 +1,26 @@
 """Command-line entry point.
 
-Dispatches to subcommand handlers (init, push, pull, ls, verify). If no
-subcommand is given, defaults to push for backwards-compatible invocation
-as a simple publisher.
+Dispatches to subcommand handlers (init, push, pull, ls, verify). With no
+subcommand, prints help.
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
 from bssync import __version__
+from bssync import term
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="bssync",
         description="Sync local markdown files with a BookStack wiki.")
-    parser.add_argument("-c", "--config", default="bookstack.yaml",
-                        help="Config file path (default: bookstack.yaml)")
+    default_config = os.environ.get("BSSYNC_CONFIG", "bookstack.yaml")
+    parser.add_argument("-c", "--config", default=default_config,
+                        help="Config file path (default: $BSSYNC_CONFIG or "
+                             "bookstack.yaml)")
     parser.add_argument("--verbose", action="store_true",
                         help="Show API request details")
     parser.add_argument("-V", "--version", action="version",
@@ -62,13 +65,9 @@ def main():
     parser = build_parser()
     args = parser.parse_args()
 
-    # Default to push if no subcommand given
     if args.command is None:
-        args.command = "push"
-        args.dry_run = False
-        args.diff = False
-        args.only = None
-        args.force = False
+        parser.print_help()
+        return
 
     config_path = Path(args.config)
 
@@ -96,9 +95,9 @@ def main():
 
     print(f"Connecting to {bs['url']}...")
     if not client.verify_connection():
-        print("Failed to connect. Check URL and API credentials.")
+        print(term.err("Failed to connect. Check URL and API credentials."))
         sys.exit(1)
-    print("Connected.")
+    print(term.dim("Connected."))
 
     if args.command == "verify":
         print("Connection verified.")
@@ -151,13 +150,15 @@ def _run_push(client, entries, config_dir, args):
             else:
                 unchanged += 1
         except FileNotFoundError:
-            print("    SKIP: file not found")
+            print(f"    {term.warn('SKIP')}: file not found")
             skipped += 1
         except Exception as e:
-            print(f"    ERROR: {e}")
+            print(f"    {term.err('ERROR')}: {e}")
             skipped += 1
 
-    print(f"\nDone: {updated} pushed, {unchanged} unchanged, {skipped} skipped")
+    print(f"\nDone: {term.ok(f'{updated} pushed')}, "
+          f"{term.dim(f'{unchanged} unchanged')}, "
+          f"{term.warn(f'{skipped} skipped')}")
 
 
 def _run_pull(client, entries, config_dir):
@@ -173,9 +174,11 @@ def _run_pull(client, entries, config_dir):
             else:
                 unchanged += 1
         except Exception as e:
-            print(f"    ERROR: {e}")
+            print(f"    {term.err('ERROR')}: {e}")
             skipped += 1
-    print(f"\nDone: {updated} pulled, {unchanged} unchanged, {skipped} skipped")
+    print(f"\nDone: {term.ok(f'{updated} pulled')}, "
+          f"{term.dim(f'{unchanged} unchanged')}, "
+          f"{term.warn(f'{skipped} skipped')}")
 
 
 if __name__ == "__main__":

@@ -6,6 +6,8 @@ from pathlib import Path
 
 import yaml
 
+from bssync import term
+
 
 def load_config(path: str) -> dict:
     """Load and validate a bssync YAML config file.
@@ -16,7 +18,11 @@ def load_config(path: str) -> dict:
     """
     p = Path(path)
     if not p.exists():
-        print(f"Error: config file not found: {path}")
+        print(term.err(f"Error: config file not found: {path}"))
+        print(f"  Run {term.bold('`bssync init`')} to create one,")
+        print(f"  or point to an existing config via "
+              f"{term.bold('--config PATH')} or "
+              f"the {term.bold('BSSYNC_CONFIG')} env var.")
         sys.exit(1)
 
     with open(p) as f:
@@ -24,7 +30,7 @@ def load_config(path: str) -> dict:
 
     bs = config.get("bookstack", {})
     if not bs.get("url"):
-        print("Error: bookstack.url is required in config")
+        print(term.err("Error: bookstack.url is required in config"))
         sys.exit(1)
 
     token_id = bs.get("token_id") or os.environ.get("BOOKSTACK_TOKEN_ID")
@@ -32,7 +38,8 @@ def load_config(path: str) -> dict:
                     or os.environ.get("BOOKSTACK_TOKEN_SECRET"))
 
     if not token_id or not token_secret:
-        print("Error: API token required. Set in config file or via environment:")
+        print(term.err("Error: API token required. Set in config file or "
+                       "via environment:"))
         print("  BOOKSTACK_TOKEN_ID=xxx BOOKSTACK_TOKEN_SECRET=yyy")
         sys.exit(1)
 
