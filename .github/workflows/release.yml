@@ -70,3 +70,85 @@ jobs:
             --title "bssync $VERSION" \
             --notes "See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for release notes." \
             artifacts/*/bssync-*
+
+  update-homebrew-tap:
+    name: Update Homebrew tap
+    needs: publish-release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Compute checksums
+        id: sha
+        run: |
+          MACOS_SHA=$(sha256sum artifacts/bssync-macos-arm64/bssync-macos-arm64 | awk '{print $1}')
+          LINUX_SHA=$(sha256sum artifacts/bssync-linux-x86_64/bssync-linux-x86_64 | awk '{print $1}')
+          echo "macos_sha=$MACOS_SHA" >> "$GITHUB_OUTPUT"
+          echo "linux_sha=$LINUX_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout tap repo
+        uses: actions/checkout@v4
+        with:
+          repository: alexamber/homebrew-bssync
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Regenerate formula
+        env:
+          VERSION_TAG: ${{ github.ref_name }}
+          MACOS_SHA: ${{ steps.sha.outputs.macos_sha }}
+          LINUX_SHA: ${{ steps.sha.outputs.linux_sha }}
+        run: |
+          VERSION="${VERSION_TAG#v}"
+          cat > tap/Formula/bssync.rb <<EOF
+          class Bssync < Formula
+            desc "Two-way sync between local markdown files and a BookStack wiki"
+            homepage "https://github.com/alexamber/bssync"
+            version "${VERSION}"
+            license "MIT"
+
+            on_macos do
+              on_arm do
+                url "https://github.com/alexamber/bssync/releases/download/${VERSION_TAG}/bssync-macos-arm64"
+                sha256 "${MACOS_SHA}"
+
+                def install
+                  bin.install "bssync-macos-arm64" => "bssync"
+                end
+              end
+            end
+
+            on_linux do
+              on_intel do
+                url "https://github.com/alexamber/bssync/releases/download/${VERSION_TAG}/bssync-linux-x86_64"
+                sha256 "${LINUX_SHA}"
+
+                def install
+                  bin.install "bssync-linux-x86_64" => "bssync"
+                end
+              end
+            end
+
+            test do
+              assert_match "bssync #{version}", shell_output("#{bin}/bssync --version")
+            end
+          end
+          EOF
+
+      - name: Commit and push
+        working-directory: tap
+        env:
+          VERSION_TAG: ${{ github.ref_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/bssync.rb
+          if git diff --staged --quiet; then
+            echo "No formula changes — already up to date."
+            exit 0
+          fi
+          git commit -m "Update bssync to ${VERSION_TAG}"
+          git push
