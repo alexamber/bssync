@@ -30,22 +30,26 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[build]"
 
-      - name: Build single-file binary
+      - name: Build onedir binary
         run: |
-          pyinstaller --onefile --name bssync \
+          pyinstaller --onedir --name bssync \
             --hidden-import bssync.init \
             --hidden-import bssync.discovery \
             --hidden-import bssync.sync \
             src/bssync/__main__.py
-          mv dist/bssync dist/${{ matrix.asset-name }}
 
       - name: Smoke test binary
-        run: ./dist/${{ matrix.asset-name }} --version
+        run: ./dist/bssync/bssync --version
+
+      - name: Package tarball
+        run: |
+          cd dist/bssync
+          tar -czf "../../${{ matrix.asset-name }}.tar.gz" .
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset-name }}
-          path: dist/${{ matrix.asset-name }}
+          path: ${{ matrix.asset-name }}.tar.gz
 
   publish-release:
     name: Publish GitHub Release
@@ -69,7 +73,7 @@ jobs:
           gh release create "$VERSION" \
             --title "bssync $VERSION" \
             --notes "See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for release notes." \
-            artifacts/*/bssync-*
+            artifacts/*/bssync-*.tar.gz
 
   update-homebrew-tap:
     name: Update Homebrew tap
@@ -84,8 +88,8 @@ jobs:
       - name: Compute checksums
         id: sha
         run: |
-          MACOS_SHA=$(sha256sum artifacts/bssync-macos-arm64/bssync-macos-arm64 | awk '{print $1}')
-          LINUX_SHA=$(sha256sum artifacts/bssync-linux-x86_64/bssync-linux-x86_64 | awk '{print $1}')
+          MACOS_SHA=$(sha256sum artifacts/bssync-macos-arm64/bssync-macos-arm64.tar.gz | awk '{print $1}')
+          LINUX_SHA=$(sha256sum artifacts/bssync-linux-x86_64/bssync-linux-x86_64.tar.gz | awk '{print $1}')
           echo "macos_sha=$MACOS_SHA" >> "$GITHUB_OUTPUT"
           echo "linux_sha=$LINUX_SHA" >> "$GITHUB_OUTPUT"
 
@@ -112,22 +116,24 @@ jobs:
 
             on_macos do
               on_arm do
-                url "https://github.com/alexamber/bssync/releases/download/${VERSION_TAG}/bssync-macos-arm64"
+                url "https://github.com/alexamber/bssync/releases/download/${VERSION_TAG}/bssync-macos-arm64.tar.gz"
                 sha256 "${MACOS_SHA}"
 
                 def install
-                  bin.install "bssync-macos-arm64" => "bssync"
+                  libexec.install Dir["*"]
+                  bin.install_symlink libexec/"bssync"
                 end
               end
             end
 
             on_linux do
               on_intel do
-                url "https://github.com/alexamber/bssync/releases/download/${VERSION_TAG}/bssync-linux-x86_64"
+                url "https://github.com/alexamber/bssync/releases/download/${VERSION_TAG}/bssync-linux-x86_64.tar.gz"
                 sha256 "${LINUX_SHA}"
 
                 def install
-                  bin.install "bssync-linux-x86_64" => "bssync"
+                  libexec.install Dir["*"]
+                  bin.install_symlink libexec/"bssync"
                 end
               end
             end
