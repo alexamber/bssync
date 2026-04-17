@@ -8,13 +8,14 @@ Edit docs in your editor, push to BookStack. Edit in BookStack's WYSIWYG, pull b
 
 ## Install
 
-**No Python needed** — download the pre-built binary from [GitHub Releases](https://github.com/alexamber/bssync/releases):
+**Homebrew** (macOS arm64, Linux x86_64):
 
 ```bash
-# macOS arm64
-curl -L https://github.com/alexamber/bssync/releases/latest/download/bssync-macos-arm64 -o /usr/local/bin/bssync
-chmod +x /usr/local/bin/bssync
+brew tap alexamber/bssync
+brew install bssync
 ```
+
+**Direct binary** from [GitHub Releases](https://github.com/alexamber/bssync/releases) — download the `.tar.gz` for your platform, extract, and place `bssync/bssync` on your PATH.
 
 **With Python:**
 
@@ -57,14 +58,15 @@ bssync push
 | Command | Description |
 |---------|-------------|
 | `bssync init` | Interactive config setup |
-| `bssync push` | Upload local → BookStack (default if no subcommand) |
+| `bssync push` | Upload local → BookStack |
 | `bssync pull` | Download BookStack → local |
 | `bssync pull --new` | List pages not in config, print YAML snippets to add them |
 | `bssync ls` | List all pages on BookStack, mark tracked vs untracked |
 | `bssync ls --missing` | Only show pages not tracked in config |
 | `bssync verify` | Test API connection |
+| `bssync completions SHELL` | Print shell completion script (bash/zsh/fish) |
 
-All commands accept `-c <path>` to use a non-default config file and `--verbose` to log API requests.
+All commands accept `-c <path>` to use a non-default config file and `--verbose` to log API requests. The `-c` default is `$BSSYNC_CONFIG` if set, otherwise `bookstack.yaml` in the current directory.
 
 ### Push
 
@@ -94,6 +96,21 @@ bssync ls                          # full BookStack tree
 bssync ls --book Engineering       # one book
 bssync ls --chapter "Setup"        # one chapter
 bssync ls --missing                # only untracked pages
+```
+
+### Shell completions
+
+```bash
+# zsh (with oh-my-zsh, save to a completions dir on your fpath)
+bssync completions zsh > ~/.zsh/completions/_bssync
+
+# bash (source in your .bashrc)
+bssync completions bash > ~/.bash_completion.d/bssync
+# or load on demand:
+source <(bssync completions bash)
+
+# fish
+bssync completions fish > ~/.config/fish/completions/bssync.fish
 ```
 
 ---

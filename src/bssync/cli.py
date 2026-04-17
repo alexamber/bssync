@@ -58,6 +58,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     subs.add_parser("verify", help="Test API connection")
 
+    comp = subs.add_parser("completions",
+                           help="Print shell completion script to stdout")
+    comp.add_argument("shell", choices=["bash", "zsh", "fish"],
+                      help="Target shell")
+
     return parser
 
 
@@ -67,6 +72,12 @@ def main():
 
     if args.command is None:
         parser.print_help()
+        return
+
+    # `completions` is pure stdout — no config needed
+    if args.command == "completions":
+        from bssync.completions import cmd_completions
+        cmd_completions(args.shell)
         return
 
     config_path = Path(args.config)

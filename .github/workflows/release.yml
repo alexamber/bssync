@@ -36,6 +36,7 @@ jobs:
             --hidden-import bssync.init \
             --hidden-import bssync.discovery \
             --hidden-import bssync.sync \
+            --hidden-import bssync.completions \
             src/bssync/__main__.py
 
       - name: Smoke test binary
