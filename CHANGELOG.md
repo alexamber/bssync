@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-04-20
+
+### Fixed
+- `push` now reconciles chapter moves for existing pages. When the yaml declares a different `chapter:` than where the page currently lives on BookStack, the page is moved into the declared chapter and a `MOVED` line is printed. Previously the content would update silently without a move. Scope: within-book moves only; cross-book moves tracked in [#2](https://github.com/alexamber/bssync/issues/2). ([#1](https://github.com/alexamber/bssync/issues/1))
+
 ## [0.2.0] - 2026-04-17
 
 ### Added
