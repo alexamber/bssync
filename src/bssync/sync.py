@@ -107,7 +107,7 @@ def publish_entry(client: BookStackClient, entry: dict, config_dir: Path,
         return _update_existing(
             client, entry, file_path, content, title, existing,
             local_images, local_file_links, all_attachment_paths,
-            show_diff, force)
+            show_diff, force, book_id, chapter_id)
     else:
         return _create_new(
             client, entry, content, title, book_id, chapter_id,
@@ -116,9 +116,11 @@ def publish_entry(client: BookStackClient, entry: dict, config_dir: Path,
 
 def _update_existing(client, entry, file_path, content, title, existing,
                      local_images, local_file_links, all_attachment_paths,
-                     show_diff, force) -> bool:
+                     show_diff, force, target_book_id, target_chapter_id) -> bool:
     """Update an existing BookStack page. Handles conflict detection,
-    attachment uploads, URL rewriting, and post-push hash reconciliation.
+    attachment uploads, URL rewriting, post-push hash reconciliation, and
+    reconciling chapter moves when the yaml's chapter differs from where
+    the page currently lives.
     """
     page_id = existing["id"]
 
@@ -128,6 +130,17 @@ def _update_existing(client, entry, file_path, content, title, existing,
     remote_markdown = page_detail.get("markdown", "")
     current_remote_hash = (normalized_hash(remote_markdown)
                            if remote_markdown else "")
+
+    # Detect chapter drift. BookStack reports chapter_id=0 for pages at book
+    # root; normalize None → 0 on the target side too. Moves are only
+    # within the same book here; cross-book moves are tracked separately.
+    # In dry-run with a declared-but-unresolved chapter, skip detection so
+    # we don't claim a bogus "move to book root".
+    current_chapter_id = page_detail.get("chapter_id", 0) or 0
+    target_chapter_norm = target_chapter_id or 0
+    chapter_unresolved = bool(entry.get("chapter")) and target_chapter_id is None
+    needs_move = (not chapter_unresolved
+                  and current_chapter_id != target_chapter_norm)
 
     # Conflict check
     if (not force and not client.dry_run and last_sync_hash
@@ -178,7 +191,9 @@ def _update_existing(client, entry, file_path, content, title, existing,
             content = replace_file_link_refs(content, link_replacements)
 
     local_normalized_hash = normalized_hash(content)
-    if last_sync_hash == current_remote_hash == local_normalized_hash:
+    content_unchanged = (last_sync_hash == current_remote_hash
+                         == local_normalized_hash)
+    if content_unchanged and not needs_move:
         print(f"  {term.dim('UNCHANGED')}: {title}")
         return False
 
@@ -193,9 +208,21 @@ def _update_existing(client, entry, file_path, content, title, existing,
         print(f"  {term.info('DIFF')}: {title}: "
               f"{term.ok(f'+{added}')} / {term.err(f'-{removed}')} lines")
 
-    resp = client.update_page(page_id, title, content, tags=tags)
+    move_kwargs = {}
+    if needs_move:
+        if target_chapter_norm:
+            move_kwargs["chapter_id"] = target_chapter_norm
+        else:
+            move_kwargs["book_id"] = target_book_id
+
+    resp = client.update_page(page_id, title, content, tags=tags, **move_kwargs)
     _reconcile_stored_hash(client, resp, local_normalized_hash, tags)
-    print(f"  {term.ok('UPDATED')}: {title} (page {page_id})")
+
+    if needs_move:
+        target_label = entry.get("chapter") or "(book root)"
+        print(f"  {term.ok('MOVED')}: {title} → {target_label}")
+    if not content_unchanged:
+        print(f"  {term.ok('UPDATED')}: {title} (page {page_id})")
     return True
 
 

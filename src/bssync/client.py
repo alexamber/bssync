@@ -170,13 +170,23 @@ class BookStackClient:
         return self._request("POST", "pages", payload)
 
     def update_page(self, page_id: int, name: str, markdown: str,
-                    tags: list = None) -> dict:
+                    tags: list = None,
+                    chapter_id: int = None,
+                    book_id: int = None) -> dict:
+        """Update a page. Pass chapter_id to move into a chapter, or book_id
+        (with chapter_id unset) to move to the book root. Omit both to leave
+        the page's location unchanged.
+        """
         if self.dry_run:
             print(f"  [dry-run] Would update page {page_id}: {name}")
             return {"id": page_id, "name": name}
         payload = {"name": name, "markdown": markdown}
         if tags:
             payload["tags"] = tags
+        if chapter_id is not None:
+            payload["chapter_id"] = chapter_id
+        elif book_id is not None:
+            payload["book_id"] = book_id
         return self._request("PUT", f"pages/{page_id}", payload)
 
     # ─── Images ───
