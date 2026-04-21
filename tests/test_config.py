@@ -70,18 +70,36 @@ def test_missing_tokens_raises(tmp_path: Path):
 
 
 def test_env_vars_override_yaml_tokens(tmp_path: Path, monkeypatch):
+    """Documented contract: env vars win over yaml. Useful for CI and
+    MCP client env: blocks where secrets shouldn't be shadowed by
+    checked-in config values."""
     path = _write_config(
         tmp_path / "cfg.yaml",
         "bookstack:\n"
-        "  url: https://docs.example.com\n"
+        "  url: https://yaml.example.com\n"
         "  token_id: yaml_id\n"
         "  token_secret: yaml_secret\n",
     )
+    monkeypatch.setenv("BOOKSTACK_URL", "https://env.example.com")
     monkeypatch.setenv("BOOKSTACK_TOKEN_ID", "env_id")
     monkeypatch.setenv("BOOKSTACK_TOKEN_SECRET", "env_secret")
     cfg = load_config(path)
-    # Current behavior: yaml value is used when present; env is fallback.
-    # This test pins that behavior so a future change is deliberate.
+    assert cfg["bookstack"]["url"] == "https://env.example.com"
+    assert cfg["bookstack"]["token_id"] == "env_id"
+    assert cfg["bookstack"]["token_secret"] == "env_secret"
+
+
+def test_yaml_values_used_when_env_absent(tmp_path: Path):
+    """With no env vars set, the yaml values are the source."""
+    path = _write_config(
+        tmp_path / "cfg.yaml",
+        "bookstack:\n"
+        "  url: https://yaml.example.com\n"
+        "  token_id: yaml_id\n"
+        "  token_secret: yaml_secret\n",
+    )
+    cfg = load_config(path)
+    assert cfg["bookstack"]["url"] == "https://yaml.example.com"
     assert cfg["bookstack"]["token_id"] == "yaml_id"
 
 

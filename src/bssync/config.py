@@ -51,9 +51,12 @@ def load_config(path: str) -> dict:
         )
 
     bs = config.get("bookstack") or {}
-    url = bs.get("url") or env_url
-    token_id = bs.get("token_id") or env_token_id
-    token_secret = bs.get("token_secret") or env_token_secret
+    # Env vars override yaml. Documented contract; matches CLI convention
+    # (aws, kubectl, gh, docker, npm) and keeps CI/MCP safe — tokens in
+    # env take precedence over anything stale in a checked-in yaml.
+    url = env_url or bs.get("url")
+    token_id = env_token_id or bs.get("token_id")
+    token_secret = env_token_secret or bs.get("token_secret")
 
     if not url:
         raise ConfigError(
