@@ -63,13 +63,15 @@ class BookStackClient:
             # terminal.
             sys.stderr.write(f"  [api] {msg}\n")
 
-    def _request(self, method: str, path: str, data: dict = None) -> dict:
+    def _request(self, method: str, path: str, data: dict = None,
+                 params: dict = None) -> dict:
         url = f"{self.url}/api/{path.lstrip('/')}"
         self._log(f"{method} {url}")
         resp = requests.request(method, url, headers=self.headers,
-                                json=data, timeout=30)
+                                json=data, params=params, timeout=30)
         if resp.status_code >= 400:
-            raise BookStackAPIError(method, url, resp.status_code, resp.text)
+            raise BookStackAPIError(method, resp.url, resp.status_code,
+                                    resp.text)
         return resp.json() if resp.text else {}
 
     def _request_multipart(self, method: str, path: str,
@@ -84,12 +86,18 @@ class BookStackClient:
             raise BookStackAPIError(method, url, resp.status_code, resp.text)
         return resp.json() if resp.text else {}
 
-    def _get_all(self, path: str) -> list:
-        """Fetch all items from a paginated BookStack endpoint."""
+    def _get_all(self, path: str, params: dict = None) -> list:
+        """Fetch all items from a paginated BookStack endpoint.
+
+        Extra `params` are passed through on every page request; useful
+        for server-side `filter[*]` narrowing so we don't scan the full
+        gallery/attachment index for per-page lookups."""
         items = []
         offset = 0
+        base_params = dict(params or {})
         while True:
-            resp = self._request("GET", f"{path}?count=100&offset={offset}")
+            page_params = {**base_params, "count": 100, "offset": offset}
+            resp = self._request("GET", path, params=page_params)
             data = resp.get("data", [])
             items.extend(data)
             if len(data) < 100:
@@ -257,9 +265,15 @@ class BookStackClient:
         return result
 
     def list_page_images(self, page_id: int) -> list:
-        """List gallery images uploaded to a specific page."""
-        all_images = self._get_all("image-gallery")
-        return [img for img in all_images if img.get("uploaded_to") == page_id]
+        """List gallery images uploaded to a specific page.
+
+        Uses BookStack's server-side `filter[uploaded_to]` so we pull
+        only this page's images rather than the entire gallery and
+        filtering locally — O(k) where k is per-page images, not O(N)
+        total gallery size.
+        """
+        return self._get_all("image-gallery",
+                             params={"filter[uploaded_to]": page_id})
 
     def delete_image(self, image_id: int):
         if self.dry_run:
@@ -312,9 +326,13 @@ class BookStackClient:
         return result
 
     def list_page_attachments(self, page_id: int) -> list:
-        """List attachments on a page."""
-        all_attachments = self._get_all("attachments")
-        return [a for a in all_attachments if a.get("uploaded_to") == page_id]
+        """List attachments on a page.
+
+        Server-side filter keeps this O(k) instead of scanning every
+        attachment in the instance.
+        """
+        return self._get_all("attachments",
+                             params={"filter[uploaded_to]": page_id})
 
     def delete_attachment(self, attachment_id: int):
         if self.dry_run:
