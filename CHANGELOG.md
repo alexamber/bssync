@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.2] - 2026-04-21
 
 ### Added
 - **`bssync mcp install`** — interactive wizard that registers the MCP server with Claude Code and/or Claude Desktop. Prompts for URL + token ID + token secret, verifies the BookStack connection before writing anything, detects which Claude client(s) are installed, and runs `claude mcp add` or merges `claude_desktop_config.json` accordingly. Cuts the Claude Code install flow from a 5-line copy-paste command to a single interactive command. Non-interactive variant for scripting: `bssync mcp install --non-interactive --target={code,desktop,both,print} --url=... --token-id=... --token-secret=...`.
