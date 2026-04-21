@@ -162,12 +162,12 @@ def main():
 
     if args.command == "ls":
         from bssync.discovery import cmd_ls
-        cmd_ls(client, config, args)
+        cmd_ls(client, config, args, config_dir)
         return
 
     if args.command == "pull" and args.new:
         from bssync.discovery import cmd_pull_discover
-        cmd_pull_discover(client, config, args)
+        cmd_pull_discover(client, config, args, config_dir)
         return
 
     # push or pull with config entries

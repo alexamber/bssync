@@ -101,6 +101,26 @@ def test_tracking_match_empty_config_safe():
     assert tracking_match(sc, "Docs", "Intro") is None
 
 
+def test_tracking_match_title_less_entry_does_not_lock_book(tmp_path):
+    """Regression: a config entry like `{file: a.md, book: Docs}` (no
+    title, no chapter) used to match every page in "Docs" via the
+    is_tracked chapter fallback, refusing all MCP live writes to that
+    book. Now the entry's title is resolved from the file/stem and only
+    that specific page matches."""
+    (tmp_path / "intro.md").write_text("# Intro\n")
+    sc = ServerContext(
+        config={"bookstack": {"url": "https://x", "token_id": "i",
+                              "token_secret": "s"},
+                "publish": [{"file": "intro.md", "book": "Docs"}]},
+        config_dir=tmp_path,
+        config_error=None,
+    )
+    # The tracked page matches its resolved title.
+    assert tracking_match(sc, "Docs", "Intro") is not None
+    # But other pages in the same book don't anymore.
+    assert tracking_match(sc, "Docs", "Some Other Page") is None
+
+
 # ─── require_one_identifier ───
 
 

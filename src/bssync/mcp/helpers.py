@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from bssync.client import BookStackClient
-from bssync.discovery import is_tracked
+from bssync.discovery import is_tracked, resolve_entries
 
 
 @dataclass
@@ -69,9 +69,15 @@ def filter_entries(sc: ServerContext, only: Optional[str]) -> list:
 def tracking_match(sc: ServerContext, book: str,
                    title: str) -> Optional[dict]:
     """Return the config entry tracking (book, title), or None.
-    Reuses discovery.is_tracked so tracking logic stays in one place."""
+
+    Resolves titles on config entries first so title-less entries match
+    by their actual sync target (H1 or filename) rather than by the old
+    chapter fallback that blocked every write to the book.
+    """
     page_like = {"book": book, "chapter": "", "name": title}
-    for entry in sc.config.get("publish", []) or []:
+    entries = resolve_entries(
+        sc.config.get("publish", []) or [], sc.config_dir)
+    for entry in entries:
         if is_tracked(page_like, [entry]):
             return entry
     return None

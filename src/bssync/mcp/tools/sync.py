@@ -16,6 +16,7 @@ from mcp.server.session import ServerSession
 from bssync.discovery import (
     is_tracked,
     list_all_pages,
+    resolve_entries,
     suggest_config_entry,
 )
 from bssync.mcp.helpers import (
@@ -195,7 +196,8 @@ async def ls(
         sc: ServerContext = ctx.request_context.lifespan_context
         client = new_client(sc)
         pages = list_all_pages(client, book, chapter)
-        entries = sc.config.get("publish", []) or []
+        entries = resolve_entries(
+            sc.config.get("publish", []) or [], sc.config_dir)
         result = []
         for p in pages:
             tracked = is_tracked(p, entries)
@@ -222,8 +224,9 @@ async def discover(
     def _run():
         sc: ServerContext = ctx.request_context.lifespan_context
         client = new_client(sc)
-        entries = sc.config.get("publish", []) or []
-        existing_files = {e.get("file") for e in entries}
+        raw_entries = sc.config.get("publish", []) or []
+        entries = resolve_entries(raw_entries, sc.config_dir)
+        existing_files = {e.get("file") for e in raw_entries}
         pages = list_all_pages(client, book, chapter)
         untracked = [p for p in pages if not is_tracked(p, entries)]
         snippets = [suggest_config_entry(p, existing_files)
