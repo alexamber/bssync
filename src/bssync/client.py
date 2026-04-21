@@ -213,9 +213,13 @@ class BookStackClient:
 
     def update_image(self, image_id: int, image_path: Path,
                      name: str = None) -> dict:
-        """Replace an existing gallery image's content via PUT. BookStack
-        requires the same file type as the original. Image id and URL
-        remain stable across the update.
+        """Replace an existing gallery image's content. BookStack requires
+        the same file type as the original. Image id and URL remain stable
+        across the update.
+
+        BookStack runs on Laravel, whose form-data parser does not read the
+        body of PUT requests. We POST with an `_method=PUT` spoof so Laravel
+        routes to the update handler while still parsing the multipart body.
         """
         if self.dry_run:
             print(f"  [dry-run] Would replace image {image_id}: {image_path.name}")
@@ -224,8 +228,8 @@ class BookStackClient:
         mime = mimetypes.guess_type(str(image_path))[0] or "image/png"
         with open(image_path, "rb") as f:
             result = self._request_multipart(
-                "PUT", f"image-gallery/{image_id}",
-                data={"name": display_name},
+                "POST", f"image-gallery/{image_id}",
+                data={"_method": "PUT", "name": display_name},
                 files={"image": (image_path.name, f, mime)},
             )
         self._log(f"Replaced image {image_id}: {image_path.name}")
@@ -265,9 +269,13 @@ class BookStackClient:
 
     def update_attachment(self, attachment_id: int, file_path: Path,
                           name: str = None) -> dict:
-        """Replace an existing attachment's content via PUT. Attachment id
-        and download URL remain stable across the update, so external links
+        """Replace an existing attachment's content. Attachment id and
+        download URL remain stable across the update, so external links
         are not broken.
+
+        BookStack runs on Laravel, whose form-data parser does not read the
+        body of PUT requests. We POST with an `_method=PUT` spoof so Laravel
+        routes to the update handler while still parsing the multipart body.
         """
         if self.dry_run:
             print(f"  [dry-run] Would replace attachment {attachment_id}: "
@@ -278,8 +286,8 @@ class BookStackClient:
                 or "application/octet-stream")
         with open(file_path, "rb") as f:
             result = self._request_multipart(
-                "PUT", f"attachments/{attachment_id}",
-                data={"name": display_name},
+                "POST", f"attachments/{attachment_id}",
+                data={"_method": "PUT", "name": display_name},
                 files={"file": (file_path.name, f, mime)},
             )
         self._log(f"Replaced attachment {attachment_id}: {file_path.name}")
