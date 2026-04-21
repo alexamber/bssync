@@ -67,6 +67,7 @@ bssync push
 | `bssync ls --missing` | Only show pages not tracked in config |
 | `bssync verify` | Test API connection |
 | `bssync completions SHELL` | Print shell completion script (bash/zsh/fish) |
+| `bssync mcp install` | Register the MCP server with Claude Code / Desktop (interactive) |
 
 All commands accept `-c <path>` to use a non-default config file and `--verbose` to log API requests. The `-c` default is `$BSSYNC_CONFIG` if set, otherwise `bookstack.yaml` in the current directory.
 
@@ -226,7 +227,24 @@ pipx install 'bssync[mcp]'
 
 ### 3. Wire it into your MCP client
 
-**Claude Desktop (if you went with options B or C)** — edit `~/Library/Application Support/Claude/claude_desktop_config.json` (or `%APPDATA%\Claude\claude_desktop_config.json` on Windows):
+**Easiest: let bssync do it.** If you installed via option B or C above, run:
+
+```bash
+bssync mcp install
+```
+
+It prompts for URL + token ID + token secret, verifies the connection before writing anything, and registers the server with whichever Claude clients it finds (Claude Code via `claude mcp add`, Claude Desktop by merging `claude_desktop_config.json`). Non-interactive variant for scripting:
+
+```bash
+bssync mcp install --non-interactive --target=code \
+  --url=https://wiki.example.com \
+  --token-id=xxx --token-secret=yyy
+# or --target=desktop, --target=both, --target=print (dry-run)
+```
+
+If you'd rather do it by hand, the sections below cover each client manually.
+
+**Claude Desktop (manual)** — edit `~/Library/Application Support/Claude/claude_desktop_config.json` (or `%APPDATA%\Claude\claude_desktop_config.json` on Windows):
 
 ```json
 {
@@ -245,7 +263,7 @@ pipx install 'bssync[mcp]'
 
 Use the absolute path — Claude Desktop launches from an unspecified working directory. Add `"BSSYNC_CONFIG": "/abs/path/bookstack.yaml"` to `env` if you want `push`/`pull` against a tracked file list; omit it for live-only usage.
 
-**Claude Code** — one command:
+**Claude Code (manual)** — one command:
 
 ```bash
 claude mcp add bssync /abs/path/to/bssync-mcp \
@@ -255,7 +273,7 @@ claude mcp add bssync /abs/path/to/bssync-mcp \
 # add -e BSSYNC_CONFIG=/abs/path/bookstack.yaml for push/pull
 ```
 
-`claude mcp list` to verify. Available in every Claude Code session afterward.
+`claude mcp list` to verify. Available in every Claude Code session afterward. (Or just use `bssync mcp install` above and skip the copy-paste.)
 
 **Terminal (MCP Inspector)** — for development or kicking the tires:
 
