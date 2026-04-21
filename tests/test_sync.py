@@ -291,3 +291,40 @@ def test_publish_entry_refresh_uploads_forces_reupload(
                             refresh_uploads=True)
     assert changed is True
     mock_client.update_attachment.assert_called_once()
+
+
+def test_publish_entry_preserves_user_added_tags(mock_client, tmp_path: Path):
+    """User tags added via the BookStack UI (e.g., status: draft, owner: alice)
+    must survive a push — bssync only owns tags under its own prefix."""
+    local_file = tmp_path / "page.md"
+    local_file.write_text("# Page\n\nEdited body.")
+
+    mock_client.find_page_in_book.return_value = {"id": 99, "name": "Page"}
+    mock_client.get_page.return_value = {
+        "id": 99,
+        "name": "Page",
+        "markdown": "Original body.",
+        "tags": [
+            {"name": "status", "value": "draft"},
+            {"name": "owner", "value": "alice"},
+            {"name": "source", "value": "auto-sync"},
+            {"name": "source_file", "value": "page.md"},
+            {"name": "content_hash", "value": "oldhash"},
+        ],
+        "chapter_id": 0,
+        "book_id": 1,
+    }
+    mock_client.update_page.return_value = {
+        "id": 99, "name": "Page", "markdown": "Edited body.",
+    }
+
+    entry = {"file": "page.md", "book": "Docs", "title": "Page"}
+
+    publish_entry(mock_client, entry, tmp_path, force=True)
+
+    written_tags = mock_client.update_page.call_args_list[0].kwargs["tags"]
+    written_names = {(t["name"], t["value"]) for t in written_tags}
+    assert ("status", "draft") in written_names
+    assert ("owner", "alice") in written_names
+    # bssync tags should also be present, with fresh values
+    assert any(t["name"] == "content_hash" for t in written_tags)

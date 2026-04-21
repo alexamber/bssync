@@ -39,6 +39,29 @@ from bssync.content import (
 IMG_HASH_TAG_PREFIX = "bssync.img_hash."
 ATT_HASH_TAG_PREFIX = "bssync.att_hash."
 
+_MANAGED_TAG_NAMES = {"source", "source_file", "content_hash"}
+
+
+def _is_bssync_managed_tag(name: str) -> bool:
+    """True for tags that bssync owns and is free to rewrite. User-added
+    tags (labels, categories, anything from the BookStack UI) must be
+    preserved across pushes.
+    """
+    return name in _MANAGED_TAG_NAMES or name.startswith("bssync.")
+
+
+def _merge_preserving_user_tags(existing_tags: list,
+                                managed_tags: list) -> list:
+    """Return a tag list that keeps any user-added tags from
+    `existing_tags` and overlays the fresh `managed_tags` bssync wants
+    to write. Without this, update_page replaces the entire tag set and
+    wipes tags the user added in the BookStack UI.
+    """
+    preserved = [{"name": t["name"], "value": t["value"]}
+                 for t in existing_tags
+                 if not _is_bssync_managed_tag(t.get("name", ""))]
+    return preserved + managed_tags
+
 
 # ─── Push ───
 
@@ -213,13 +236,14 @@ def _update_existing(client, entry, file_path, content, title, existing,
         print(f"  {term.dim('UNCHANGED')}: {title}")
         return False
 
-    tags = [
+    managed_tags = [
         {"name": "source", "value": "auto-sync"},
         {"name": "source_file", "value": str(entry["file"])},
         {"name": "content_hash", "value": local_normalized_hash},
         *image_hash_tags,
         *attachment_hash_tags,
     ]
+    tags = _merge_preserving_user_tags(existing_tags, managed_tags)
 
     if show_diff and not client.dry_run and remote_markdown:
         added, removed = diff_summary(remote_markdown, content)
