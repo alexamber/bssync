@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2026-04-21
 
 ### Added
 - **MCP server** (`bssync-mcp`) — Model Context Protocol server for Claude Desktop, Claude Code, and any MCP-compatible client. Install via `pip install 'bssync[mcp]'` or download the standalone `bssync-mcp-*.tar.gz` from GitHub Releases (no Python required on the host). Exposes 12 tools: sync (`verify`, `push`, `pull`, `ls`, `discover`), read-only live access (`list_books`, `list_chapters`, `list_pages_in`, `search_pages`, `get_page`), and guarded live writes (`create_page`, `update_page`). Live writes refuse pages tracked in the config's `publish:` list — those must go through the local files + `push` flow — preserving bssync's "local markdown is the source of truth" invariant.
