@@ -78,10 +78,24 @@ async def create_page(
             book_id=b["id"], chapter_id=chapter_id,
             tags=[{"name": "source", "value": "bssync-mcp-live"}],
         )
+        page_id = result.get("id")
+        # Re-fetch so content_hash reflects BookStack's stored form
+        # rather than what we sent. BookStack can normalize markdown on
+        # save (whitespace, list formatting); callers chaining
+        # update_page with expected_hash would otherwise hit spurious
+        # hash_mismatch conflicts. CLI's _reconcile_stored_hash does the
+        # equivalent for the sync path; this brings live writes in line.
+        stored_md = ""
+        if page_id is not None and page_id >= 0:
+            try:
+                stored_md = client.get_page(page_id).get("markdown", "")
+            except Exception:
+                stored_md = markdown  # fall back to what we sent
         return {
             "status": "created",
-            "page_id": result.get("id"),
+            "page_id": page_id,
             "title": result.get("name"),
+            "content_hash": normalized_hash(stored_md) if stored_md else "",
         }
     return await run_in_thread(ctx, _run)
 
@@ -159,10 +173,16 @@ async def update_page(
 
         page_title = new_title or current_title
         result = client.update_page(resolved_id, page_title, markdown)
+        # See create_page above — re-fetch so content_hash matches the
+        # stored form, not the sent form.
+        try:
+            stored_md = client.get_page(resolved_id).get("markdown", "")
+        except Exception:
+            stored_md = markdown
         return {
             "status": "updated",
             "page_id": result.get("id", resolved_id),
             "title": result.get("name", page_title),
-            "content_hash": normalized_hash(markdown),
+            "content_hash": normalized_hash(stored_md) if stored_md else "",
         }
     return await run_in_thread(ctx, _run)
