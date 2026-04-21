@@ -156,4 +156,6 @@ def set_sync_tag(client: BookStackClient, page_detail: dict,
         client.update_page(page_detail["id"], page_detail["name"],
                            page_detail.get("markdown", ""), tags=new_tags)
     except Exception as e:
-        print(f"    warning: could not update sync tag: {e}")
+        # stderr — set_sync_tag runs during MCP pull too, where stdout
+        # is the protocol channel.
+        sys.stderr.write(f"    warning: could not update sync tag: {e}\n")

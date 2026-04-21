@@ -8,6 +8,7 @@ where stdout is the protocol channel.
 """
 
 import mimetypes
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -57,7 +58,10 @@ class BookStackClient:
 
     def _log(self, msg: str):
         if self.verbose:
-            print(f"  [api] {msg}")
+            # stderr so verbose logging doesn't corrupt MCP stdio — the
+            # CLI sets verbose via --verbose and still sees it on the
+            # terminal.
+            sys.stderr.write(f"  [api] {msg}\n")
 
     def _request(self, method: str, path: str, data: dict = None) -> dict:
         url = f"{self.url}/api/{path.lstrip('/')}"
