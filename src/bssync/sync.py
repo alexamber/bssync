@@ -23,6 +23,7 @@ from bssync.conflict import (
     set_sync_tag,
 )
 from bssync.content import (
+    file_hash,
     find_local_file_links,
     find_local_images,
     extract_title,
@@ -35,11 +36,16 @@ from bssync.content import (
 )
 
 
+IMG_HASH_TAG_PREFIX = "bssync.img_hash."
+ATT_HASH_TAG_PREFIX = "bssync.att_hash."
+
+
 # ─── Push ───
 
 
 def publish_entry(client: BookStackClient, entry: dict, config_dir: Path,
-                  show_diff: bool = False, force: bool = False) -> bool:
+                  show_diff: bool = False, force: bool = False,
+                  refresh_uploads: bool = False) -> bool:
     """Push a single config entry to BookStack. Returns True if changes
     were made, False for no-op.
 
@@ -107,7 +113,7 @@ def publish_entry(client: BookStackClient, entry: dict, config_dir: Path,
         return _update_existing(
             client, entry, file_path, content, title, existing,
             local_images, local_file_links, all_attachment_paths,
-            show_diff, force, book_id, chapter_id)
+            show_diff, force, book_id, chapter_id, refresh_uploads)
     else:
         return _create_new(
             client, entry, content, title, book_id, chapter_id,
@@ -116,7 +122,8 @@ def publish_entry(client: BookStackClient, entry: dict, config_dir: Path,
 
 def _update_existing(client, entry, file_path, content, title, existing,
                      local_images, local_file_links, all_attachment_paths,
-                     show_diff, force, target_book_id, target_chapter_id) -> bool:
+                     show_diff, force, target_book_id, target_chapter_id,
+                     refresh_uploads) -> bool:
     """Update an existing BookStack page. Handles conflict detection,
     attachment uploads, URL rewriting, post-push hash reconciliation, and
     reconciling chapter moves when the yaml's chapter differs from where
@@ -174,15 +181,23 @@ def _update_existing(client, entry, file_path, content, title, existing,
 
     # Upload images + rewrite refs. Listing is a safe GET; upload_image
     # no-ops on dry-run (returns placeholder URLs).
+    image_hash_tags: list = []
+    images_changed = False
     if local_images:
-        image_replacements = upload_images_for_page(
-            client, page_id, local_images)
+        image_replacements, image_hash_tags, images_changed = (
+            upload_images_for_page(client, page_id, local_images,
+                                   existing_tags=existing_tags,
+                                   refresh=refresh_uploads))
         content = replace_image_refs(content, image_replacements)
 
     # Upload attachments + rewrite file link refs
+    attachment_hash_tags: list = []
+    attachments_changed = False
     if all_attachment_paths:
-        att_url_map = upload_attachments_for_page(
-            client, page_id, all_attachment_paths)
+        att_url_map, attachment_hash_tags, attachments_changed = (
+            upload_attachments_for_page(client, page_id, all_attachment_paths,
+                                        existing_tags=existing_tags,
+                                        refresh=refresh_uploads))
         link_replacements = {}
         for local_ref, local_path in local_file_links:
             if local_path.name in att_url_map:
@@ -193,7 +208,8 @@ def _update_existing(client, entry, file_path, content, title, existing,
     local_normalized_hash = normalized_hash(content)
     content_unchanged = (last_sync_hash == current_remote_hash
                          == local_normalized_hash)
-    if content_unchanged and not needs_move:
+    uploads_changed = images_changed or attachments_changed
+    if content_unchanged and not needs_move and not uploads_changed:
         print(f"  {term.dim('UNCHANGED')}: {title}")
         return False
 
@@ -201,6 +217,8 @@ def _update_existing(client, entry, file_path, content, title, existing,
         {"name": "source", "value": "auto-sync"},
         {"name": "source_file", "value": str(entry["file"])},
         {"name": "content_hash", "value": local_normalized_hash},
+        *image_hash_tags,
+        *attachment_hash_tags,
     ]
 
     if show_diff and not client.dry_run and remote_markdown:
@@ -221,7 +239,7 @@ def _update_existing(client, entry, file_path, content, title, existing,
     if needs_move:
         target_label = entry.get("chapter") or "(book root)"
         print(f"  {term.ok('MOVED')}: {title} → {target_label}")
-    if not content_unchanged:
+    if not content_unchanged or uploads_changed:
         print(f"  {term.ok('UPDATED')}: {title} (page {page_id})")
     return True
 
@@ -242,13 +260,15 @@ def _create_new(client, entry, content, title, book_id, chapter_id,
             title, content, book_id=book_id, chapter_id=chapter_id, tags=tags)
         page_id = result.get("id", -1)
 
+        image_hash_tags: list = []
         if local_images:
-            image_replacements = upload_images_for_page(
+            image_replacements, image_hash_tags, _ = upload_images_for_page(
                 client, page_id, local_images)
             content = replace_image_refs(content, image_replacements)
 
+        attachment_hash_tags: list = []
         if all_attachment_paths:
-            att_url_map = upload_attachments_for_page(
+            att_url_map, attachment_hash_tags, _ = upload_attachments_for_page(
                 client, page_id, all_attachment_paths)
             link_replacements = {}
             for local_ref, local_path in local_file_links:
@@ -259,6 +279,8 @@ def _create_new(client, entry, content, title, book_id, chapter_id,
 
         local_hash = normalized_hash(content)
         tags.append({"name": "content_hash", "value": local_hash})
+        tags.extend(image_hash_tags)
+        tags.extend(attachment_hash_tags)
         resp = client.update_page(page_id, title, content, tags=tags)
         _reconcile_stored_hash(client, resp, local_hash, tags)
     else:
@@ -269,8 +291,12 @@ def _create_new(client, entry, content, title, book_id, chapter_id,
         page_id = resp.get("id", -1)
 
         if all_attachment_paths and not client.dry_run:
-            upload_attachments_for_page(
+            _, attachment_hash_tags, _ = upload_attachments_for_page(
                 client, page_id, all_attachment_paths)
+            if attachment_hash_tags:
+                tags.extend(attachment_hash_tags)
+                # Persist the attachment hashes onto the just-created page
+                client.update_page(page_id, title, content, tags=tags)
 
         _reconcile_stored_hash(client, resp, local_hash, tags)
 
@@ -394,29 +420,87 @@ def _write_pulled_content(file_path: Path, content: str):
 
 
 def upload_images_for_page(client: BookStackClient, page_id: int,
-                           local_images: list) -> dict[str, str]:
-    """Upload local images to BookStack, returning {local_ref: remote_url}."""
-    replacements = {}
-    existing = {img["name"]: img for img in client.list_page_images(page_id)}
+                           local_images: list,
+                           existing_tags: list = None,
+                           refresh: bool = False
+                           ) -> tuple[dict[str, str], list[dict], bool]:
+    """Upload or replace local images on a page.
+
+    Compares each local image's SHA256 against a per-image hash stored on
+    the page as a `bssync.img_hash.<stem>` tag. When the hash differs (or
+    `refresh=True`), the gallery entry is replaced in place via PUT — ID
+    and URL preserved.
+
+    Returns (url_map, hash_tags, any_changed):
+        url_map     {local_ref: remote_url} for reference rewriting
+        hash_tags   list of {name, value} dicts to persist on the page
+        any_changed True if at least one image was uploaded or replaced
+    """
+    existing_tags = existing_tags or []
+    stored_hashes = {t["name"]: t["value"] for t in existing_tags
+                     if t.get("name", "").startswith(IMG_HASH_TAG_PREFIX)}
+    existing_images = {img["name"]: img
+                       for img in client.list_page_images(page_id)}
+
+    replacements: dict[str, str] = {}
+    hash_tags: list[dict] = []
+    any_changed = False
 
     for local_ref, img_path in local_images:
         img_name = img_path.stem
-        if img_name in existing:
-            replacements[local_ref] = existing[img_name]["url"]
-            print(f"    IMAGE EXISTS: {img_path.name}")
+        tag_name = f"{IMG_HASH_TAG_PREFIX}{img_name}"
+        local_h = file_hash(img_path)
+
+        if img_name in existing_images:
+            existing_img = existing_images[img_name]
+            stored_h = stored_hashes.get(tag_name, "")
+            if not refresh and stored_h == local_h:
+                replacements[local_ref] = existing_img["url"]
+                print(f"    IMAGE UNCHANGED: {img_path.name}")
+            else:
+                result = client.update_image(
+                    existing_img["id"], img_path, name=img_name)
+                # PUT returns the image object; fall back to the existing
+                # URL if the response shape differs.
+                replacements[local_ref] = result.get("url") or existing_img["url"]
+                print(f"    IMAGE UPDATED: {img_path.name}")
+                any_changed = True
         else:
             result = client.upload_image(page_id, img_path, name=img_name)
             replacements[local_ref] = result["url"]
             print(f"    IMAGE UPLOADED: {img_path.name}")
+            any_changed = True
 
-    return replacements
+        hash_tags.append({"name": tag_name, "value": local_h})
+
+    return replacements, hash_tags, any_changed
 
 
 def upload_attachments_for_page(client: BookStackClient, page_id: int,
-                                file_paths: list) -> dict[str, str]:
-    """Upload file attachments to a page. Returns {filename: download_url}."""
+                                file_paths: list,
+                                existing_tags: list = None,
+                                refresh: bool = False
+                                ) -> tuple[dict[str, str], list[dict], bool]:
+    """Upload or replace file attachments on a page.
+
+    Compares each local file's SHA256 against a per-file hash stored on
+    the page as a `bssync.att_hash.<filename>` tag. When the hash differs
+    (or `refresh=True`), the attachment is replaced in place via PUT —
+    attachment ID and download URL preserved so external links don't break.
+
+    Returns (url_map, hash_tags, any_changed):
+        url_map     {filename: download_url}
+        hash_tags   list of {name, value} dicts to persist on the page
+        any_changed True if at least one attachment was uploaded or replaced
+    """
+    existing_tags = existing_tags or []
+    stored_hashes = {t["name"]: t["value"] for t in existing_tags
+                     if t.get("name", "").startswith(ATT_HASH_TAG_PREFIX)}
     existing = {a["name"]: a for a in client.list_page_attachments(page_id)}
-    url_map = {}
+
+    url_map: dict[str, str] = {}
+    hash_tags: list[dict] = []
+    any_changed = False
 
     for file_path in file_paths:
         if not file_path.exists():
@@ -424,15 +508,29 @@ def upload_attachments_for_page(client: BookStackClient, page_id: int,
             continue
 
         display_name = file_path.name
+        tag_name = f"{ATT_HASH_TAG_PREFIX}{display_name}"
+        local_h = file_hash(file_path)
+
         if display_name in existing:
-            att_id = existing[display_name]["id"]
-            url_map[display_name] = f"{client.url}/attachments/{att_id}"
-            print(f"    ATTACHMENT EXISTS: {display_name}")
+            att = existing[display_name]
+            att_id = att["id"]
+            stored_h = stored_hashes.get(tag_name, "")
+            if not refresh and stored_h == local_h:
+                url_map[display_name] = f"{client.url}/attachments/{att_id}"
+                print(f"    ATTACHMENT UNCHANGED: {display_name}")
+            else:
+                client.update_attachment(att_id, file_path, name=display_name)
+                url_map[display_name] = f"{client.url}/attachments/{att_id}"
+                print(f"    ATTACHMENT UPDATED: {display_name}")
+                any_changed = True
         else:
             result = client.upload_attachment(
                 page_id, file_path, name=display_name)
             att_id = result.get("id")
             url_map[display_name] = f"{client.url}/attachments/{att_id}"
             print(f"    ATTACHMENT UPLOADED: {display_name}")
+            any_changed = True
 
-    return url_map
+        hash_tags.append({"name": tag_name, "value": local_h})
+
+    return url_map, hash_tags, any_changed

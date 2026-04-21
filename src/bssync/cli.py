@@ -39,6 +39,9 @@ def build_parser() -> argparse.ArgumentParser:
                       help="Only push entries matching this string")
     push.add_argument("--force", action="store_true",
                       help="Skip conflict check; overwrite remote")
+    push.add_argument("--refresh-uploads", action="store_true",
+                      help="Unconditionally re-upload all images and "
+                           "attachments, ignoring stored content hashes")
 
     pull = subs.add_parser("pull", help="Download BookStack → local")
     pull.add_argument("--only", type=str,
@@ -155,7 +158,8 @@ def _run_push(client, entries, config_dir, args):
         print(f"  {entry['file']}")
         try:
             changed = publish_entry(client, entry, config_dir,
-                                    show_diff=args.diff, force=args.force)
+                                    show_diff=args.diff, force=args.force,
+                                    refresh_uploads=args.refresh_uploads)
             if changed:
                 updated += 1
             else:

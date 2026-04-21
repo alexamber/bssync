@@ -211,6 +211,26 @@ class BookStackClient:
         self._log(f"Uploaded image: {image_path.name} → {result.get('url')}")
         return result
 
+    def update_image(self, image_id: int, image_path: Path,
+                     name: str = None) -> dict:
+        """Replace an existing gallery image's content via PUT. BookStack
+        requires the same file type as the original. Image id and URL
+        remain stable across the update.
+        """
+        if self.dry_run:
+            print(f"  [dry-run] Would replace image {image_id}: {image_path.name}")
+            return {"id": image_id, "url": f"(dry-run:{image_path.name})"}
+        display_name = name or image_path.stem
+        mime = mimetypes.guess_type(str(image_path))[0] or "image/png"
+        with open(image_path, "rb") as f:
+            result = self._request_multipart(
+                "PUT", f"image-gallery/{image_id}",
+                data={"name": display_name},
+                files={"image": (image_path.name, f, mime)},
+            )
+        self._log(f"Replaced image {image_id}: {image_path.name}")
+        return result
+
     def list_page_images(self, page_id: int) -> list:
         """List gallery images uploaded to a specific page."""
         all_images = self._get_all("image-gallery")
@@ -241,6 +261,28 @@ class BookStackClient:
                 files={"file": (file_path.name, f, mime)},
             )
         self._log(f"Uploaded attachment: {file_path.name} → page {page_id}")
+        return result
+
+    def update_attachment(self, attachment_id: int, file_path: Path,
+                          name: str = None) -> dict:
+        """Replace an existing attachment's content via PUT. Attachment id
+        and download URL remain stable across the update, so external links
+        are not broken.
+        """
+        if self.dry_run:
+            print(f"  [dry-run] Would replace attachment {attachment_id}: "
+                  f"{file_path.name}")
+            return {"id": attachment_id, "name": name or file_path.name}
+        display_name = name or file_path.name
+        mime = (mimetypes.guess_type(str(file_path))[0]
+                or "application/octet-stream")
+        with open(file_path, "rb") as f:
+            result = self._request_multipart(
+                "PUT", f"attachments/{attachment_id}",
+                data={"name": display_name},
+                files={"file": (file_path.name, f, mime)},
+            )
+        self._log(f"Replaced attachment {attachment_id}: {file_path.name}")
         return result
 
     def list_page_attachments(self, page_id: int) -> list:

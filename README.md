@@ -76,6 +76,7 @@ bssync push --only guide           # filter by file or title substring
 bssync push --dry-run              # preview without API writes
 bssync push --diff                 # show content diff per updated page
 bssync push --force                # skip conflict check (see below)
+bssync push --refresh-uploads      # force re-upload of all images and attachments
 ```
 
 ### Pull
@@ -176,7 +177,7 @@ On push: detects the reference, uploads, rewrites URL to BookStack's. Supported:
 1. **Inline file links** — `[schema.sql](path/to/schema.sql)` in markdown auto-uploads and rewrites to the BookStack download URL.
 2. **Config list** — explicit `attachments:` list for files not referenced inline.
 
-Both de-duplicate by filename — existing uploads are reused.
+Both de-duplicate by filename. When a file with the same name already exists on the page, bssync compares a SHA256 of the local file against a hash tag stored on the page (`bssync.att_hash.*` / `bssync.img_hash.*`). On content change it replaces the remote file in place via `PUT` — attachment IDs and download URLs are preserved, so external links don't break. Use `--refresh-uploads` to force re-upload regardless.
 
 ---
 

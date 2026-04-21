@@ -75,6 +75,17 @@ def normalized_hash(text: str) -> str:
     return hashlib.sha256(normalize_markdown(text).encode()).hexdigest()[:16]
 
 
+def file_hash(path: Path) -> str:
+    """Short SHA-256 hash of a file's raw bytes. Used to detect when a local
+    image or attachment has been edited since its last upload.
+    """
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()[:16]
+
+
 # ─── Inline image references ───
 
 

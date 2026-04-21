@@ -33,7 +33,7 @@ _bssync_completions() {
     fi
 
     case "$cmd" in
-        push) COMPREPLY=( $(compgen -W "--dry-run --diff --only --force -h --help" -- "$cur") ) ;;
+        push) COMPREPLY=( $(compgen -W "--dry-run --diff --only --force --refresh-uploads -h --help" -- "$cur") ) ;;
         pull) COMPREPLY=( $(compgen -W "--only --new --book --chapter -h --help" -- "$cur") ) ;;
         ls)   COMPREPLY=( $(compgen -W "--book --chapter --missing -h --help" -- "$cur") ) ;;
         completions) COMPREPLY=( $(compgen -W "bash zsh fish" -- "$cur") ) ;;
@@ -78,7 +78,8 @@ _bssync() {
                         '--dry-run[Preview without writes]' \
                         '--diff[Show content diff]' \
                         '--only[Filter entries]:filter:' \
-                        '--force[Skip conflict check]'
+                        '--force[Skip conflict check]' \
+                        '--refresh-uploads[Force re-upload all images and attachments]'
                     ;;
                 pull)
                     _arguments \
@@ -126,6 +127,7 @@ complete -c bssync -n '__fish_seen_subcommand_from push' -l dry-run -d 'Preview 
 complete -c bssync -n '__fish_seen_subcommand_from push' -l diff -d 'Show content diff'
 complete -c bssync -n '__fish_seen_subcommand_from push' -l only -r -d 'Filter entries'
 complete -c bssync -n '__fish_seen_subcommand_from push' -l force -d 'Skip conflict check'
+complete -c bssync -n '__fish_seen_subcommand_from push' -l refresh-uploads -d 'Force re-upload all images/attachments'
 
 # pull flags
 complete -c bssync -n '__fish_seen_subcommand_from pull' -l only -r -d 'Filter entries'
