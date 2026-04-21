@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bssync"
-version = "0.2.1"
+version = "0.3.0"
 description = "Two-way sync between local markdown files and a BookStack wiki"
 readme = "README.md"
 license = { text = "MIT" }
@@ -39,9 +39,13 @@ dev = [
 build = [
     "pyinstaller>=6.0",
 ]
+mcp = [
+    "mcp>=1.2",
+]
 
 [project.scripts]
 bssync = "bssync.cli:main"
+bssync-mcp = "bssync.mcp.server:main"
 
 [project.urls]
 Homepage = "https://github.com/alexamber/bssync"

@@ -32,7 +32,7 @@ def test_pull_entry_creates_file_when_missing(mock_client, tmp_path: Path):
 
     changed = pull_entry(mock_client, entry, tmp_path)
 
-    assert changed is True
+    assert changed.changed is True
     assert local_file.exists()
     content = local_file.read_text()
     assert content.startswith("# Intro")
@@ -43,14 +43,14 @@ def test_pull_entry_skips_when_book_not_found(mock_client, tmp_path: Path):
     mock_client.find_book.return_value = None
     entry = {"file": "x.md", "book": "Missing", "title": "X"}
 
-    assert pull_entry(mock_client, entry, tmp_path) is False
+    assert pull_entry(mock_client, entry, tmp_path).changed is False
 
 
 def test_pull_entry_skips_when_page_not_found(mock_client, tmp_path: Path):
     mock_client.find_page_in_book.return_value = None
     entry = {"file": "x.md", "book": "Docs", "title": "X"}
 
-    assert pull_entry(mock_client, entry, tmp_path) is False
+    assert pull_entry(mock_client, entry, tmp_path).changed is False
 
 
 def test_pull_entry_skips_when_remote_markdown_empty(mock_client, tmp_path: Path):
@@ -60,7 +60,7 @@ def test_pull_entry_skips_when_remote_markdown_empty(mock_client, tmp_path: Path
     }
     entry = {"file": "x.md", "book": "Docs", "title": "X"}
 
-    assert pull_entry(mock_client, entry, tmp_path) is False
+    assert pull_entry(mock_client, entry, tmp_path).changed is False
 
 
 def test_pull_entry_unchanged_when_local_matches_remote(mock_client, tmp_path: Path):
@@ -79,7 +79,7 @@ def test_pull_entry_unchanged_when_local_matches_remote(mock_client, tmp_path: P
     entry = {"file": "intro.md", "book": "Docs", "title": "Intro"}
 
     changed = pull_entry(mock_client, entry, tmp_path)
-    assert changed is False
+    assert changed.changed is False
 
 
 def test_publish_entry_moves_page_when_chapter_changed(mock_client,
@@ -119,7 +119,7 @@ def test_publish_entry_moves_page_when_chapter_changed(mock_client,
 
     changed = publish_entry(mock_client, entry, tmp_path)
 
-    assert changed is True
+    assert changed.changed is True
     # Must have called update_page with chapter_id=42 (the move)
     call_kwargs = mock_client.update_page.call_args_list[0].kwargs
     assert call_kwargs.get("chapter_id") == 42
@@ -155,7 +155,7 @@ def test_publish_entry_no_move_when_chapter_matches(mock_client,
     }
 
     changed = publish_entry(mock_client, entry, tmp_path)
-    assert changed is False
+    assert changed.changed is False
     mock_client.update_page.assert_not_called()
 
 
@@ -198,7 +198,7 @@ def test_publish_entry_reuploads_attachment_when_local_content_changed(
 
     changed = publish_entry(mock_client, entry, tmp_path)
 
-    assert changed is True
+    assert changed.changed is True
     mock_client.update_attachment.assert_called_once()
     # Hash tag should be persisted with the new value
     written_tags = mock_client.update_page.call_args_list[0].kwargs["tags"]
@@ -243,7 +243,7 @@ def test_publish_entry_skips_attachment_when_hash_matches(
     }
 
     changed = publish_entry(mock_client, entry, tmp_path)
-    assert changed is False
+    assert changed.changed is False
     mock_client.update_attachment.assert_not_called()
     mock_client.upload_attachment.assert_not_called()
     mock_client.update_page.assert_not_called()
@@ -289,7 +289,7 @@ def test_publish_entry_refresh_uploads_forces_reupload(
 
     changed = publish_entry(mock_client, entry, tmp_path,
                             refresh_uploads=True)
-    assert changed is True
+    assert changed.changed is True
     mock_client.update_attachment.assert_called_once()
 
 

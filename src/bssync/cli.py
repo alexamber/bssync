@@ -66,6 +66,34 @@ def build_parser() -> argparse.ArgumentParser:
     comp.add_argument("shell", choices=["bash", "zsh", "fish"],
                       help="Target shell")
 
+    mcp = subs.add_parser("mcp",
+                          help="MCP server helpers (install, configure)")
+    mcp_subs = mcp.add_subparsers(dest="mcp_command", required=True)
+    mcp_install = mcp_subs.add_parser(
+        "install",
+        help="Register the bssync MCP server with Claude Code / Desktop")
+    mcp_install.add_argument(
+        "--target",
+        choices=["auto", "code", "desktop", "both", "print"],
+        default="auto",
+        help="Which client to install into. "
+             "`auto` detects and prompts if both are present; "
+             "`print` just emits config snippets.")
+    mcp_install.add_argument("--url",
+                             help="BookStack URL (else prompted or from "
+                                  "BOOKSTACK_URL)")
+    mcp_install.add_argument("--token-id", dest="token_id",
+                             help="API token ID (else prompted or from "
+                                  "BOOKSTACK_TOKEN_ID)")
+    mcp_install.add_argument("--token-secret", dest="token_secret",
+                             help="API token secret (else prompted or "
+                                  "from BOOKSTACK_TOKEN_SECRET)")
+    mcp_install.add_argument("--config-file", dest="config_file",
+                             help="Optional bookstack.yaml path for "
+                                  "push/pull support")
+    mcp_install.add_argument("--non-interactive", action="store_true",
+                             help="Skip prompts; require flags/env vars")
+
     return parser
 
 
@@ -83,6 +111,15 @@ def main():
         cmd_completions(args.shell)
         return
 
+    # `mcp install` configures the MCP server against Claude clients; it
+    # does its own connection verification and shouldn't need a
+    # bookstack.yaml to exist first.
+    if args.command == "mcp":
+        if args.mcp_command == "install":
+            from bssync.mcp_install import cmd_mcp_install
+            sys.exit(cmd_mcp_install(args))
+        return  # argparse enforces a subcommand via required=True
+
     config_path = Path(args.config)
 
     # `init` runs before any config loading since it creates the config
@@ -93,9 +130,15 @@ def main():
 
     # Lazy imports so `bssync init` / `bssync --help` stay fast
     from bssync.client import BookStackClient
-    from bssync.config import load_config
+    from bssync.config import ConfigError, load_config
 
-    config = load_config(str(config_path))
+    try:
+        config = load_config(str(config_path))
+    except ConfigError as e:
+        print(term.err(f"Error: {e.message}"))
+        if e.fix:
+            print(f"  {e.fix}")
+        sys.exit(1)
     config_dir = config_path.parent
 
     bs = config["bookstack"]
@@ -119,12 +162,12 @@ def main():
 
     if args.command == "ls":
         from bssync.discovery import cmd_ls
-        cmd_ls(client, config, args)
+        cmd_ls(client, config, args, config_dir)
         return
 
     if args.command == "pull" and args.new:
         from bssync.discovery import cmd_pull_discover
-        cmd_pull_discover(client, config, args)
+        cmd_pull_discover(client, config, args, config_dir)
         return
 
     # push or pull with config entries
@@ -145,8 +188,56 @@ def main():
         _run_push(client, entries, config_dir, args)
 
 
+def _render_result(result):
+    """Render one EntryResult line under the `  <file>` heading that was
+    already printed above. Colors + label follow the pre-refactor UX."""
+    from bssync.sync import SyncStatus
+    s = result.status
+    if s is SyncStatus.UPDATED:
+        extra = ""
+        if result.diff_added is not None and result.diff_removed is not None:
+            extra = (f" ({term.ok(f'+{result.diff_added}')}/"
+                     f"{term.err(f'-{result.diff_removed}')})")
+        page_info = f" (page {result.page_id})" if result.page_id else ""
+        print(f"    {term.ok('UPDATED')}: {result.title}{page_info}{extra}")
+    elif s is SyncStatus.CREATED:
+        page_info = f" (page {result.page_id})" if result.page_id else ""
+        detail = f" → {result.detail}" if result.detail else ""
+        print(f"    {term.ok('CREATED')}: {result.title}{page_info}{detail}")
+    elif s is SyncStatus.MOVED:
+        print(f"    {term.ok('MOVED')}: {result.title} {result.detail}")
+        if result.content_updated:
+            print(f"    {term.ok('UPDATED')}: {result.title} "
+                  f"(page {result.page_id})")
+    elif s is SyncStatus.PULLED:
+        print(f"    {term.ok('PULLED')}: {result.title} → {result.detail}")
+    elif s is SyncStatus.UNCHANGED:
+        print(f"    {term.dim('UNCHANGED')}: {result.title}")
+    elif s is SyncStatus.CONFLICT:
+        added, removed = result.diff_added or 0, result.diff_removed or 0
+        print(f"    {term.warn('CONFLICT')}: \"{result.title}\" was modified "
+              f"on BookStack since last publish "
+              f"({term.ok(f'+{added}')}/{term.err(f'-{removed}')} lines). "
+              f"Use --force to overwrite.")
+    elif s is SyncStatus.DIFFERS:
+        added, removed = result.diff_added or 0, result.diff_removed or 0
+        print(f"    {term.warn('DIFFERS')}: \"{result.title}\" differs from "
+              f"remote ({term.ok(f'+{added}')}/{term.err(f'-{removed}')}). "
+              f"Run interactively to overwrite.")
+    elif s is SyncStatus.SKIPPED:
+        tail = f": {result.detail}" if result.detail else ""
+        print(f"    {term.warn('SKIP')}{tail}")
+
+
+def _on_progress_print(msg: str) -> None:
+    """Callback for sync orchestrators to emit per-file sub-events. Matches
+    the previous pre-refactor indentation; uppercase for backward-looking
+    visual parity with the UPDATED/UPLOADED/UNCHANGED labels."""
+    print(f"    {msg.upper()}")
+
+
 def _run_push(client, entries, config_dir, args):
-    from bssync.sync import publish_entry
+    from bssync.sync import SyncStatus, publish_entry
 
     if args.dry_run:
         print(f"\n[DRY RUN] Would push {len(entries)} entries:\n")
@@ -157,16 +248,18 @@ def _run_push(client, entries, config_dir, args):
     for entry in entries:
         print(f"  {entry['file']}")
         try:
-            changed = publish_entry(client, entry, config_dir,
-                                    show_diff=args.diff, force=args.force,
-                                    refresh_uploads=args.refresh_uploads)
-            if changed:
+            result = publish_entry(
+                client, entry, config_dir,
+                show_diff=args.diff, force=args.force,
+                refresh_uploads=args.refresh_uploads,
+                on_progress=_on_progress_print)
+            _render_result(result)
+            if result.changed:
                 updated += 1
+            elif result.status in (SyncStatus.CONFLICT, SyncStatus.SKIPPED):
+                skipped += 1
             else:
                 unchanged += 1
-        except FileNotFoundError:
-            print(f"    {term.warn('SKIP')}: file not found")
-            skipped += 1
         except Exception as e:
             print(f"    {term.err('ERROR')}: {e}")
             skipped += 1
@@ -177,15 +270,20 @@ def _run_push(client, entries, config_dir, args):
 
 
 def _run_pull(client, entries, config_dir):
-    from bssync.sync import pull_entry
+    from bssync.sync import SyncStatus, pull_entry
 
     print(f"\nPulling {len(entries)} entries:\n")
     updated = unchanged = skipped = 0
     for entry in entries:
         print(f"  {entry['file']}")
         try:
-            if pull_entry(client, entry, config_dir):
+            result = pull_entry(client, entry, config_dir,
+                                on_progress=_on_progress_print)
+            _render_result(result)
+            if result.changed:
                 updated += 1
+            elif result.status in (SyncStatus.DIFFERS, SyncStatus.SKIPPED):
+                skipped += 1
             else:
                 unchanged += 1
         except Exception as e:

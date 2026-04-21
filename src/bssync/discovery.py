@@ -2,8 +2,11 @@
 (find pages not yet in config)."""
 
 import re
+from pathlib import Path
 
 from bssync.client import BookStackClient
+from bssync.config import resolve_file_path
+from bssync.content import extract_title, read_markdown
 
 
 def list_all_pages(client: BookStackClient, book_filter: str = None,
@@ -38,32 +41,60 @@ def list_all_pages(client: BookStackClient, book_filter: str = None,
     return result
 
 
+def resolve_entry_title(entry: dict, config_dir: Path) -> str:
+    """Return the title a publish entry would sync under.
+
+    Mirrors the resolution `publish_entry` performs at push time: explicit
+    `title:` wins, else the first H1 in the local file, else the file
+    stem. Keeps `is_tracked` aligned with what actually gets synced so a
+    title-less entry matches the specific page it targets rather than
+    every page in its book/chapter.
+    """
+    title = entry.get("title")
+    if title:
+        return title
+    file_ref = entry.get("file", "")
+    if not file_ref:
+        return ""
+    file_path = resolve_file_path(file_ref, config_dir)
+    if file_path.exists():
+        return extract_title(read_markdown(file_path), file_path.stem)
+    return file_path.stem
+
+
+def resolve_entries(entries: list, config_dir: Path) -> list:
+    """Return a shallow copy of `entries` with `title` populated on every
+    entry. Callers pass the output to `is_tracked` instead of the raw
+    config list, so `is_tracked` can rely on titles being present."""
+    return [{**e, "title": resolve_entry_title(e, config_dir)}
+            for e in entries]
+
+
 def is_tracked(page: dict, entries: list) -> bool:
     """Check if a BookStack page is tracked by a config entry.
 
-    Primary match is (book + title). Chapter is not required to match
-    since chapters can drift between config and BookStack. If an entry
-    has no explicit title, fall back to (book + chapter).
+    Match on (book + title) only — no fuzzy fallback. Entries with an
+    empty resolved title (no file, file missing, no H1) never match,
+    which is the safe default: a malformed entry shouldn't silently
+    claim pages.
+
+    Callers that accept title-less config entries must pass
+    `resolve_entries(entries, config_dir)` first; otherwise a legitimate
+    entry with no explicit `title:` in the yaml won't be recognized.
     """
+    page_title = page["name"].lower()
     for e in entries:
         if e.get("book", "").lower() != page["book"].lower():
             continue
         entry_title = (e.get("title") or "").lower()
-        page_title = page["name"].lower()
-        if entry_title:
-            if entry_title == page_title:
-                return True
-        else:
-            entry_chapter = (e.get("chapter") or "").lower()
-            page_chapter = (page["chapter"] or "").lower()
-            if entry_chapter == page_chapter:
-                return True
+        if entry_title and entry_title == page_title:
+            return True
     return False
 
 
-def cmd_ls(client, config, args):
+def cmd_ls(client, config, args, config_dir: Path):
     """Print the BookStack tree, marking which pages are tracked in config."""
-    entries = config.get("publish", [])
+    entries = resolve_entries(config.get("publish", []), config_dir)
     pages = list_all_pages(client, args.book, args.chapter)
 
     tree: dict = {}
@@ -112,11 +143,12 @@ def suggest_config_entry(page: dict, existing_files: set) -> str:
     return "\n".join(lines)
 
 
-def cmd_pull_discover(client, config, args):
+def cmd_pull_discover(client, config, args, config_dir: Path):
     """Discovery mode: find pages on BookStack not yet in config and
     print ready-to-paste YAML snippets."""
-    entries = config.get("publish", [])
-    existing_files = {e.get("file") for e in entries}
+    raw_entries = config.get("publish", [])
+    entries = resolve_entries(raw_entries, config_dir)
+    existing_files = {e.get("file") for e in raw_entries}
     pages = list_all_pages(client, args.book, args.chapter)
     untracked = [p for p in pages if not is_tracked(p, entries)]
 

@@ -7,6 +7,7 @@ state beyond reading the input file. Easy to test in isolation.
 
 import hashlib
 import re
+import sys
 from pathlib import Path
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"}
@@ -104,7 +105,12 @@ def find_local_images(content: str, file_dir: Path) -> list[tuple[str, Path]]:
         if img_path.exists() and img_path.suffix.lower() in IMAGE_EXTENSIONS:
             images.append((img_ref, img_path))
         else:
-            print(f"  WARNING: Local image not found or unsupported: {img_ref}")
+            # stderr, not stdout — this module is called from the MCP
+            # server, where stdout is the protocol channel.
+            sys.stderr.write(
+                f"  WARNING: Local image not found or unsupported: "
+                f"{img_ref}\n"
+            )
     return images
 
 
