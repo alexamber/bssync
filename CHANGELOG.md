@@ -29,6 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `push` now preserves user-added tags on BookStack pages (labels, categories, anything from the BookStack UI). Previously every push replaced the full tag set with only bssync-managed tags, silently wiping the rest.
 - Image and attachment replacement (`update_image`, `update_attachment`) now works on BookStack instances that don't accept `PUT` with multipart — falls back to `POST` with `_method=PUT` override.
 - Attachment and image content changes are now properly reconciled on push — content-hash drift no longer causes spurious "UNCHANGED" reports when binary content differs.
+- **Tracked-page identity no longer matches fuzzy.** Title-less config entries like `{file: intro.md, book: Docs}` used to claim every page in "Docs" as tracked (via an is_tracked fallback to book+chapter), which meant MCP live writes to any page in that book were refused. Entries now resolve to their actual sync target title (explicit → file H1 → filename stem) before matching. Behavior change: entries that relied on the fallback now only match their specific target.
+- **MCP live-write hash reconciliation.** `create_page` and `update_page` now re-fetch the page after writing so the returned `content_hash` reflects BookStack's stored form rather than what was sent. Callers chaining a live update with `expected_hash` no longer hit spurious `hash_mismatch` conflicts caused by BookStack's on-save markdown normalization. Matches what CLI sync already does via `_reconcile_stored_hash`.
+- **Shared-logic stdout leaks routed to stderr.** Three `print()` calls in modules shared between CLI and MCP (`content.find_local_images` warning, `conflict.set_sync_tag` exception, `client._log` verbose trace) could corrupt MCP's stdio protocol channel. CLI output is unchanged — terminals display stderr identically.
+
+### Performance
+- **Per-page image/attachment lookups now use server-side filters** (`filter[uploaded_to]`). `list_page_images` / `list_page_attachments` previously pulled the full gallery/attachment index across all pages and filtered locally — O(N) per call where N is the total across the instance. On a 10k-image wiki, a 50-entry push dropped from ~5000 list API calls to ~50.
 
 ## [0.2.1] - 2026-04-20
 
