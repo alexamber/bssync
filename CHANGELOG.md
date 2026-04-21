@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-04-21
+
+### Fixed
+- **DXT install on Claude Desktop was broken.** The bundled manifest used a bare relative path (`server/bssync-mcp/bssync-mcp`) for `mcp_config.command`, which Claude Desktop resolved as a PATH lookup rather than against the extension's install directory — every DXT install failed with "Failed to spawn process: No such file or directory". Fixed by using the spec's `${__dirname}` template variable. Re-download the `.dxt` from the v0.3.1 release and reinstall.
+
 ## [0.3.0] - 2026-04-21
 
 ### Added

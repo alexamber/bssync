@@ -19,7 +19,7 @@
     "type": "binary",
     "entry_point": "server/bssync-mcp/bssync-mcp",
     "mcp_config": {
-      "command": "server/bssync-mcp/bssync-mcp",
+      "command": "${__dirname}/server/bssync-mcp/bssync-mcp",
       "args": [],
       "env": {
         "BOOKSTACK_URL": "${user_config.bookstack_url}",
