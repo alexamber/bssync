@@ -196,30 +196,45 @@ Typical workflow:
 
 ## MCP server (Claude Desktop, Claude Code & terminal)
 
-bssync ships a Model Context Protocol server so Claude (Desktop, Claude Code, or any MCP client) can sync, browse, and author BookStack pages directly. It reuses the same `bookstack.yaml` — no second config.
+bssync ships a Model Context Protocol server so Claude (Desktop, Claude Code, or any MCP client) can sync, browse, and author BookStack pages directly. It reuses the same `bookstack.yaml` — no second config. Live tools work without any yaml at all if you set the env vars.
 
-**Install options:**
+### 1. Get a BookStack API token
+
+In BookStack: **Profile → Edit Profile → API Tokens → Create Token**. Copy the **Token ID** and **Token Secret** (the secret is shown once).
+
+### 2. Install
+
+Three paths — pick whichever matches your setup.
+
+**Option A — Claude Desktop Extension (easiest).** Download `bssync-mcp-<platform>.dxt` from [GitHub Releases](https://github.com/alexamber/bssync/releases), then in Claude Desktop: **Settings → Extensions → Install from file…**, pick the `.dxt`, fill in URL + token ID + token secret in the prompt. Done — no PATH setup, no JSON editing.
+
+**Option B — Standalone binary.** Download `bssync-mcp-<platform>.tar.gz` from Releases. PyInstaller onedir format: the binary needs its sibling files, so `cp bssync-mcp /usr/local/bin/` will break it. Correct install:
 
 ```bash
-# Standalone binary (no Python needed) — download the bssync-mcp-*.tar.gz
-# for your platform from https://github.com/alexamber/bssync/releases,
-# extract, and place `bssync-mcp/bssync-mcp` on your PATH.
+tar -xzf bssync-mcp-macos-arm64.tar.gz -C ~/.local/lib/  # extracts into a bssync-mcp/ directory
+ln -s ~/.local/lib/bssync-mcp/bssync-mcp ~/.local/bin/bssync-mcp
+bssync-mcp --version   # should print `bssync-mcp 0.3.0`
+```
 
-# Or via pip (bundles the mcp SDK):
+**Option C — Python / pip.** When you already have Python:
+
+```bash
 pip install 'bssync[mcp]'
-# isolated:
+# or isolated:
 pipx install 'bssync[mcp]'
 ```
 
-**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS, `%APPDATA%\Claude\claude_desktop_config.json` on Windows):
+### 3. Wire it into your MCP client
+
+**Claude Desktop (if you went with options B or C)** — edit `~/Library/Application Support/Claude/claude_desktop_config.json` (or `%APPDATA%\Claude\claude_desktop_config.json` on Windows):
 
 ```json
 {
   "mcpServers": {
     "bssync": {
-      "command": "bssync-mcp",
+      "command": "/absolute/path/to/bssync-mcp",
       "env": {
-        "BSSYNC_CONFIG": "/absolute/path/to/bookstack.yaml",
+        "BOOKSTACK_URL": "https://wiki.example.com",
         "BOOKSTACK_TOKEN_ID": "xxx",
         "BOOKSTACK_TOKEN_SECRET": "yyy"
       }
@@ -228,32 +243,40 @@ pipx install 'bssync[mcp]'
 }
 ```
 
+Use the absolute path — Claude Desktop launches from an unspecified working directory. Add `"BSSYNC_CONFIG": "/abs/path/bookstack.yaml"` to `env` if you want `push`/`pull` against a tracked file list; omit it for live-only usage.
+
 **Claude Code** — one command:
 
 ```bash
-claude mcp add bssync bssync-mcp \
-  -e BSSYNC_CONFIG=/absolute/path/to/bookstack.yaml \
+claude mcp add bssync /abs/path/to/bssync-mcp \
+  -e BOOKSTACK_URL=https://wiki.example.com \
   -e BOOKSTACK_TOKEN_ID=xxx \
   -e BOOKSTACK_TOKEN_SECRET=yyy
+# add -e BSSYNC_CONFIG=/abs/path/bookstack.yaml for push/pull
 ```
 
-Then `claude mcp list` to verify, and it's available in every Claude Code session.
+`claude mcp list` to verify. Available in every Claude Code session afterward.
 
-Put secrets in the `env:` block (or `-e` flags) rather than the yaml file — the env vars override the config, so you can keep `token_id`/`token_secret` blank in a shared/checked-in config. `BSSYNC_CONFIG` **must be absolute** because Claude Desktop/Code launch the server from an unspecified working directory.
-
-**No yaml at all (pure env config):** if you set `BOOKSTACK_URL`, `BOOKSTACK_TOKEN_ID`, and `BOOKSTACK_TOKEN_SECRET`, the server runs without `bookstack.yaml`. You lose `push`/`pull` (those need a `publish:` list), but every other tool works — ideal for MCP-only usage.
-
-`publish:` is optional in the config when you only want live/read-only usage — leave it blank and you still get `ls`, `search_pages`, `get_page`, and the live write tools.
-
-**Terminal (MCP Inspector)** — for debugging or trying out the server:
+**Terminal (MCP Inspector)** — for development or kicking the tires:
 
 ```bash
-BSSYNC_CONFIG=/abs/path/bookstack.yaml npx -y @modelcontextprotocol/inspector bssync-mcp
+BOOKSTACK_URL=https://wiki.example.com \
+  BOOKSTACK_TOKEN_ID=xxx BOOKSTACK_TOKEN_SECRET=yyy \
+  npx -y @modelcontextprotocol/inspector bssync-mcp
 ```
 
-### Tools
+### Troubleshooting
 
-**Sync** — mirrors the CLI, runs against the config's `publish:` list:
+If Claude Desktop shows "MCP server disconnected" or tools return `config_invalid`:
+
+- **Check the server logs:** `~/Library/Logs/Claude/mcp*.log` on macOS, `%APPDATA%\Claude\Logs\mcp*.log` on Windows. The bssync-mcp server prints startup errors to stderr which land here.
+- **Token wrong:** tools will return `{"status": "error", "reason": "config_invalid"}` instead of the server crashing at startup. Fix the env vars and restart the MCP client.
+- **URL unreachable:** the startup log will show the BookStack URL the server tried to connect to; confirm it's correct and reachable from the MCP client's host.
+- **`cp bssync-mcp` broke it:** if you see "can't find library" errors, you moved just the binary out of its onedir bundle. Re-extract the tarball and symlink as shown above.
+
+### Tools, resources & prompts
+
+**Sync tools** — mirror the CLI, run against the config's `publish:` list. Both `push` and `pull` emit per-entry progress notifications so MCP clients can show status rather than waiting silently.
 
 | Tool | Notes |
 |------|-------|
@@ -263,28 +286,41 @@ BSSYNC_CONFIG=/abs/path/bookstack.yaml npx -y @modelcontextprotocol/inspector bs
 | `ls` | Full tree with `tracked: true/false` per page |
 | `discover` | Returns untracked pages + ready-to-paste YAML snippets |
 
-**Live (read-only)** — work with BookStack directly, no local files needed:
+**Live read tools** — work with BookStack directly, no local files needed:
 
 | Tool | Notes |
 |------|-------|
 | `list_books` / `list_chapters` / `list_pages_in` | Navigation |
 | `search_pages(query)` | BookStack full-text search |
-| `get_page(page_id)` | Returns markdown + `content_hash` for optimistic concurrency |
+| `get_page(page_id \| book+title)` | Lookup by id or by name; returns markdown + `content_hash` for optimistic concurrency |
 
-**Live (write)** — guarded to prevent desyncing tracked content:
+**Live write tools** — guarded to prevent desyncing tracked content:
 
 | Tool | Guardrail |
 |------|-----------|
 | `create_page(book, title, markdown, chapter?)` | Refuses if `(book, title)` matches a config entry |
-| `update_page(page_id, markdown, title?, expected_hash?)` | Refuses if the page is tracked; optional `expected_hash` from `get_page` blocks stomping concurrent edits |
+| `update_page(markdown, page_id \| book+title, new_title?, expected_hash?)` | Refuses if the page is tracked; optional `expected_hash` from `get_page` blocks stomping concurrent edits |
 
 The guardrail exists because local markdown is the source of truth for tracked pages — letting Claude write to them live would silently invalidate the sync state. For tracked pages, edit the local file and call `push` instead.
+
+**Resources** — Claude Desktop can `@`-mention these to pull pages into conversation context:
+
+| URI | Returns |
+|-----|---------|
+| `bookstack://page/{page_id}` | Markdown of a page by numeric id |
+| `bookstack://page/by-title/{book}/{title}` | Markdown of a page by book + title |
+
+**Prompts** — templates in Claude Desktop's slash-picker:
+
+| Prompt | Use |
+|--------|-----|
+| `summarize_page` | Fetch a page (by id or book+title) and summarize in 3-5 bullets |
+| `find_docs` | Search BookStack for a topic and report back with links |
 
 ### Roadmap
 
 - Homebrew formula for the `bssync-mcp` binary (currently CLI-only).
-- Claude Desktop `.dxt` extension bundle for one-click install.
-- MCP `resources` and `prompts` primitives — expose `bookstack://page/{id}` as a resource and ship a few prompt templates.
+- Windows binary + DXT for Windows users (currently macOS arm64 and Linux x86_64 only).
 - Optional full live-write mode for tracked pages (with conflict detection via the `content_hash` tag), behind a config flag. Today, writes to tracked pages are refused.
 
 ---

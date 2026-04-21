@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **MCP resources** — `bookstack://page/{page_id}` and `bookstack://page/by-title/{book}/{title}`. Claude Desktop users can `@`-mention wiki pages to pull them into conversation context natively.
+- **MCP prompts** — `summarize_page` and `find_docs` templates available in Claude Desktop's slash-picker.
+- **Claude Desktop Extension (.dxt)** bundle — one-click install. Download `bssync-mcp-<platform>.dxt` from Releases, Desktop prompts for URL + tokens, done. No PATH setup or JSON editing required.
+- **By-name lookups** on `get_page` and `update_page` — accept `(book, title)` as an alternative to `page_id`. Cuts "update the onboarding doc" from 4 tool calls to 1.
+- **Progress notifications** on `push` and `pull` — per-entry status via the MCP Context, so long syncs report progress instead of hanging silently.
+
+### Changed
+- **`update_page` parameter rename:** the "set new title" arg renamed from `title` to `new_title`, freeing `title` to mean "page title to look up". Breaking change for anyone calling `update_page(page_id, markdown, title=...)` — pre-release API only, no shipped v0.3.0 consumers.
+- **Deferred config loading:** when config is missing or BookStack is unreachable at startup, the MCP server now starts anyway and every tool returns a structured `{"status": "error", "reason": "config_invalid", "fix": "..."}` response. Previously the server exited with a stderr message, which Claude Desktop surfaced only as "server disconnected" with no actionable detail.
+
 ## [0.3.0] - 2026-04-21
 
 ### Added

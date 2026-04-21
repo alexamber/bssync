@@ -1,0 +1,64 @@
+{
+  "manifest_version": "0.3",
+  "name": "bssync",
+  "display_name": "bssync — BookStack sync & wiki tools",
+  "version": "__VERSION__",
+  "description": "Browse, search, sync, and author BookStack wiki pages from Claude. Two-way sync between local markdown files and a BookStack wiki, plus live read/write tools for untracked pages.",
+  "author": {
+    "name": "Alex Rybkin",
+    "url": "https://github.com/alexamber"
+  },
+  "homepage": "https://github.com/alexamber/bssync",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alexamber/bssync"
+  },
+  "license": "MIT",
+  "keywords": ["bookstack", "wiki", "markdown", "sync", "documentation"],
+  "server": {
+    "type": "binary",
+    "entry_point": "server/bssync-mcp/bssync-mcp",
+    "mcp_config": {
+      "command": "server/bssync-mcp/bssync-mcp",
+      "args": [],
+      "env": {
+        "BOOKSTACK_URL": "${user_config.bookstack_url}",
+        "BOOKSTACK_TOKEN_ID": "${user_config.token_id}",
+        "BOOKSTACK_TOKEN_SECRET": "${user_config.token_secret}",
+        "BSSYNC_CONFIG": "${user_config.config_file}"
+      }
+    }
+  },
+  "user_config": {
+    "bookstack_url": {
+      "type": "string",
+      "title": "BookStack URL",
+      "description": "Base URL of your BookStack instance, e.g. https://wiki.example.com",
+      "required": true
+    },
+    "token_id": {
+      "type": "string",
+      "title": "API Token ID",
+      "description": "From BookStack: Profile -> Edit Profile -> API Tokens -> Create Token.",
+      "sensitive": true,
+      "required": true
+    },
+    "token_secret": {
+      "type": "string",
+      "title": "API Token Secret",
+      "description": "Shown once when the token is created; store it somewhere safe.",
+      "sensitive": true,
+      "required": true
+    },
+    "config_file": {
+      "type": "string",
+      "title": "Config file path (optional)",
+      "description": "Absolute path to a bookstack.yaml. Only needed for push/pull against a tracked file list. Leave blank for live/read-only usage.",
+      "required": false,
+      "default": ""
+    }
+  },
+  "compatibility": {
+    "platforms": ["__PLATFORM__"]
+  }
+}

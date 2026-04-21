@@ -16,9 +16,11 @@ jobs:
           - os: macos-latest
             cli-asset: bssync-macos-arm64
             mcp-asset: bssync-mcp-macos-arm64
+            dxt-platform: darwin
           - os: ubuntu-latest
             cli-asset: bssync-linux-x86_64
             mcp-asset: bssync-mcp-linux-x86_64
+            dxt-platform: linux
 
     steps:
       - uses: actions/checkout@v4
@@ -64,6 +66,25 @@ jobs:
           tar -C dist/bssync -czf "${{ matrix.cli-asset }}.tar.gz" .
           tar -C dist/bssync-mcp -czf "${{ matrix.mcp-asset }}.tar.gz" .
 
+      - name: Build Claude Desktop extension (.dxt)
+        # A DXT is a zip of manifest.json + the bundled server. Claude
+        # Desktop installs it with one click and prompts for the env vars
+        # declared in user_config, so non-Python users skip the PATH +
+        # JSON-editing dance entirely.
+        env:
+          VERSION_TAG: ${{ github.ref_name }}
+          PLATFORM: ${{ matrix.dxt-platform }}
+          DXT_ASSET: ${{ matrix.mcp-asset }}
+        run: |
+          VERSION="${VERSION_TAG#v}"
+          rm -rf dxt-build
+          mkdir -p dxt-build/server
+          cp -R dist/bssync-mcp dxt-build/server/
+          sed -e "s/__VERSION__/${VERSION}/g" \
+              -e "s/__PLATFORM__/${PLATFORM}/g" \
+              dxt/manifest.json.template > dxt-build/manifest.json
+          (cd dxt-build && zip -qr "../${DXT_ASSET}.dxt" .)
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.cli-asset }}
@@ -73,6 +94,11 @@ jobs:
         with:
           name: ${{ matrix.mcp-asset }}
           path: ${{ matrix.mcp-asset }}.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.mcp-asset }}-dxt
+          path: ${{ matrix.mcp-asset }}.dxt
 
   publish-release:
     name: Publish GitHub Release
@@ -96,7 +122,8 @@ jobs:
           gh release create "$VERSION" \
             --title "bssync $VERSION" \
             --notes "See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for release notes." \
-            artifacts/*/bssync-*.tar.gz
+            artifacts/*/bssync-*.tar.gz \
+            artifacts/*/bssync-*.dxt
 
   update-homebrew-tap:
     name: Update Homebrew tap
