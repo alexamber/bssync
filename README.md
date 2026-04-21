@@ -1,8 +1,44 @@
 # bssync
 
-Two-way sync between local markdown files and a [BookStack](https://www.bookstackapp.com/) wiki.
+Two-way sync between local markdown files and a [BookStack](https://www.bookstackapp.com/) wiki, plus an MCP server so Claude can author and search your wiki without silently corrupting your synced docs.
 
-Edit docs in your editor, push to BookStack. Edit in BookStack's WYSIWYG, pull back to your editor. Safe against silent overwrites, auto-uploads images and file attachments, discovers untracked pages.
+Edit markdown locally, push to BookStack. Non-engineers edit in BookStack's WYSIWYG, pull back to git. Auto-uploads images and attachments, discovers untracked pages, refuses to stomp external edits.
+
+---
+
+## What bssync is for
+
+Your markdown lives in git — **that's your source of truth**. BookStack is where your team reads and searches it. bssync is the bridge that keeps those aligned without making either side accidentally authoritative.
+
+Typical mental model:
+
+- **git repo** = authored markdown, history, review, ownership
+- **BookStack** = presentation, search, bookmarking for non-engineer readers
+- **bssync** = the enforced, auditable channel between them
+
+The whole design — the `content_hash` guardrail, the `publish:` tracking list, the MCP live-write refusal for tracked pages — exists to preserve that contract.
+
+### Who it's for
+
+**Docs-as-code teams.** Engineers keep runbooks, ADRs, RFCs, and architecture notes in a repo. A curated subset mirrors to BookStack so support / PM / leadership can read and search without having to clone-pull-open-IDE.
+
+**Claude Code as the authoring surface.** This is the workflow the tool is designed around: draft and edit markdown in your terminal alongside the code it describes, let Claude brainstorm and refactor, then `bssync push` when ready. The MCP server (`bssync mcp install`) gives Claude search + read over existing wiki content for context ("what does the current runbook say about rollback?") without ever leaving the terminal.
+
+**Non-engineer contributions via BookStack.** PM edits a feature spec in BookStack's markdown editor; engineer runs `bssync pull` at review time; the diff shows up in git; merges via PR. No "also please update the repo" coordination.
+
+**CI-driven publishing.** `bssync push --force` on merge to main (GitHub Actions, GitLab CI, cron), with `BOOKSTACK_TOKEN_ID` / `BOOKSTACK_TOKEN_SECRET` as secrets. The wiki stays current without anyone clicking publish.
+
+**LLM research over the wiki.** Install the MCP server in Claude Desktop or Claude Code. Ask "what does our deployment doc cover?" and Claude answers via `search_pages` + `get_page`. The guardrail on live writes means it can't accidentally corrupt a tracked doc while helping you.
+
+**Quick one-off authoring from Claude.** "Write a post-mortem about yesterday's incident and publish it under Incidents → Oct 2026." `create_page` handles it — no local file needed. Only works on untracked pages, so the sync contract still holds for everything in `publish:`.
+
+**Wiki audit / migration.** `bssync ls --missing` lists BookStack pages not in your `publish:` file. Useful when moving from BookStack-first to git-first — the output is the migration backlog.
+
+### Who it's probably not for
+
+- **Full BookStack admin via LLM.** If you want Claude to manage users, roles, shelves, permissions, and recycle bins, use a general-purpose server like [pnocera/bookstack-mcp-server](https://github.com/pnocera/bookstack-mcp-server). bssync is deliberately sync-shaped and exposes only tools that make sense for that workflow.
+- **BookStack-first teams.** If BookStack is your system of record and git is a copy, bssync's guardrails are inverted for you. Use the BookStack API directly.
+- **Non-BookStack wikis** (Confluence, MediaWiki, Notion, etc.). bssync is BookStack-specific and the project intends to stay that way. Fork for other targets.
 
 ---
 
