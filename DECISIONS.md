@@ -111,7 +111,7 @@ Lightweight ADRs for decisions that shape bssync's design. Each entry explains t
 
 ## 11. MCP server as a separate script behind an optional extra
 
-**Decision:** The Model Context Protocol server ships as `bssync-mcp` (second entry in `[project.scripts]`), with the `mcp` SDK gated behind a `[project.optional-dependencies].mcp` extra. Install with `pip install 'bssync[mcp]'`. The server lives in `src/bssync/mcp_server.py` and wraps the existing `publish_entry`/`pull_entry`/`list_all_pages` orchestrators — no business logic is duplicated.
+**Decision:** The Model Context Protocol server ships as `bssync-mcp` (second entry in `[project.scripts]`), with the `mcp` SDK gated behind a `[project.optional-dependencies].mcp` extra. Install with `pip install 'bssync[mcp]'`. The server lives in the `src/bssync/mcp/` package (`server.py` + `helpers.py` + `tools/{sync,live_read,live_write}.py` + `resources.py` + `prompts.py`) and wraps the existing `publish_entry`/`pull_entry`/`list_all_pages` orchestrators — no business logic is duplicated.
 
 **Alternatives considered:**
 - Add `mcp` as a core dependency — violates [ADR 6](#6-two-runtime-dependencies-only). The core CLI has no use for it.
@@ -122,4 +122,4 @@ Lightweight ADRs for decisions that shape bssync's design. Each entry explains t
 
 **Live write guardrail:** `create_page` / `update_page` refuse pages tracked in the config's `publish:` list. Local markdown is the source of truth for tracked content (see [ADR 1](#1-state-lives-on-bookstack-not-locally)); letting an LLM write to a tracked page live would invalidate the `content_hash` tag and silently desync. Read-only live tools (`get_page`, `search_pages`, `list_*`) are unrestricted. A future "option C" — full live writes with automatic tag reconciliation — is possible once we understand usage patterns, tracked in [BACKLOG.md](docs/BACKLOG.md).
 
-**Stdio hygiene:** The existing orchestrators `print()` progress to stdout, but stdout is the MCP protocol channel — stray prints would corrupt the stream. `mcp_server.py` wraps every tool call in `contextlib.redirect_stdout` and returns captured output as `_log` in the structured result. On exception, the log is flushed to stderr so operators can diagnose failures.
+**Stdio hygiene:** Orchestrators are silent by construction — `publish_entry`/`pull_entry` return `EntryResult` dataclasses and emit per-file sub-events through an optional `on_progress` callback, never `print()`. `BookStackClient` raises `BookStackAPIError` instead of printing response bodies. The MCP server wraps only startup (config load + connection probe) with `contextlib.redirect_stdout(sys.stderr)` as cheap insurance against third-party library output; tool invocations need no capture layer. Any residual warning path in shared modules (`content.find_local_images`, `conflict.set_sync_tag`) writes to stderr directly.

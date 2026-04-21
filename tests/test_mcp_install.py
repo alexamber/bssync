@@ -33,13 +33,13 @@ def test_resolve_server_command_prefers_bin_on_path():
 
 
 def test_resolve_server_command_falls_back_to_python_m():
-    """Without the binary, fall back to `python -m bssync.mcp_server`
+    """Without the binary, fall back to `python -m bssync.mcp.server`
     using the current interpreter + emit a warning."""
     with patch("bssync.mcp_install.shutil.which") as which:
         which.return_value = None
         command, args, warning = _resolve_server_command()
     assert command == sys.executable
-    assert args == ["-m", "bssync.mcp_server"]
+    assert args == ["-m", "bssync.mcp.server"]
     assert warning is not None
     assert "bssync-mcp" in warning
 

@@ -85,7 +85,7 @@ def _resolve_server_command() -> tuple[str, list[str], Optional[str]]:
     """Return (command, args, warning).
 
     Prefers the `bssync-mcp` console script when on PATH. Falls back to
-    `python -m bssync.mcp_server` using the current interpreter, which
+    `python -m bssync.mcp.server` using the current interpreter, which
     works as long as this Python can still import the bssync package.
     """
     path = shutil.which("bssync-mcp")
@@ -93,10 +93,10 @@ def _resolve_server_command() -> tuple[str, list[str], Optional[str]]:
         return path, [], None
     warning = (
         "bssync-mcp not found on PATH — using this Python interpreter "
-        "with `-m bssync.mcp_server` as a fallback. Install the server "
+        "with `-m bssync.mcp.server` as a fallback. Install the server "
         "with `pip install 'bssync[mcp]'` for a standalone binary."
     )
-    return sys.executable, ["-m", "bssync.mcp_server"], warning
+    return sys.executable, ["-m", "bssync.mcp.server"], warning
 
 
 # ─── Client detection ───
