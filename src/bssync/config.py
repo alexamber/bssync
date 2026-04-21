@@ -1,12 +1,22 @@
 """Config loading and path resolution."""
 
 import os
-import sys
 from pathlib import Path
 
 import yaml
 
-from bssync import term
+
+class ConfigError(Exception):
+    """Raised by load_config when the config is missing or malformed.
+
+    Carries a human-readable `fix` alongside the message so callers (CLI,
+    MCP server, mcp_install wizard) can format the guidance appropriately
+    for their UI instead of each one reconstructing it.
+    """
+    def __init__(self, message: str, fix: str = ""):
+        super().__init__(message)
+        self.message = message
+        self.fix = fix
 
 
 def load_config(path: str) -> dict:
@@ -32,14 +42,13 @@ def load_config(path: str) -> dict:
         # No publish list means push/pull are no-ops but live/read tools work.
         config = {"bookstack": {}, "publish": []}
     else:
-        print(term.err(f"Error: config file not found: {path}"))
-        print(f"  Run {term.bold('`bssync init`')} to create one, point to "
-              f"an existing config with {term.bold('--config PATH')} or "
-              f"{term.bold('BSSYNC_CONFIG')},")
-        print(f"  or set {term.bold('BOOKSTACK_URL')} + "
-              f"{term.bold('BOOKSTACK_TOKEN_ID')} + "
-              f"{term.bold('BOOKSTACK_TOKEN_SECRET')} env vars.")
-        sys.exit(1)
+        raise ConfigError(
+            f"config file not found: {path}",
+            fix="Run `bssync init` to create one, point to an existing "
+                "config via --config PATH or BSSYNC_CONFIG, or set "
+                "BOOKSTACK_URL + BOOKSTACK_TOKEN_ID + BOOKSTACK_TOKEN_SECRET "
+                "env vars.",
+        )
 
     bs = config.get("bookstack") or {}
     url = bs.get("url") or env_url
@@ -47,15 +56,17 @@ def load_config(path: str) -> dict:
     token_secret = bs.get("token_secret") or env_token_secret
 
     if not url:
-        print(term.err("Error: bookstack.url is required in config "
-                       "(or set BOOKSTACK_URL env var)"))
-        sys.exit(1)
+        raise ConfigError(
+            "bookstack.url is required",
+            fix="Set it in the config file, or set BOOKSTACK_URL env var.",
+        )
 
     if not token_id or not token_secret:
-        print(term.err("Error: API token required. Set in config file or "
-                       "via environment:"))
-        print("  BOOKSTACK_TOKEN_ID=xxx BOOKSTACK_TOKEN_SECRET=yyy")
-        sys.exit(1)
+        raise ConfigError(
+            "BookStack API token required",
+            fix="Set bookstack.token_id / token_secret in the config file, "
+                "or set BOOKSTACK_TOKEN_ID / BOOKSTACK_TOKEN_SECRET env vars.",
+        )
 
     config["bookstack"] = {
         **bs,

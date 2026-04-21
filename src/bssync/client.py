@@ -2,7 +2,9 @@
 
 Single class that encapsulates all HTTP interaction with a BookStack
 instance. Caches books and chapters to reduce redundant API calls during
-a single run. All methods raise RuntimeError on HTTP errors.
+a single run. All methods raise BookStackAPIError on HTTP errors — they
+never print to stdout, so the client is safe to use from the MCP server
+where stdout is the protocol channel.
 """
 
 import mimetypes
@@ -11,7 +13,20 @@ from typing import Optional
 
 import requests
 
-from bssync import term
+
+class BookStackAPIError(RuntimeError):
+    """Raised when a BookStack API call returns a non-2xx response.
+
+    Carries the status code, method, and URL so callers can render a
+    useful error message without having to parse str(e).
+    """
+    def __init__(self, method: str, url: str, status: int, body: str = ""):
+        self.method = method
+        self.url = url
+        self.status = status
+        self.body = body
+        detail = f": {body[:200]}" if body else ""
+        super().__init__(f"{method} {url} -> {status}{detail}")
 
 
 class BookStackClient:
@@ -50,9 +65,7 @@ class BookStackClient:
         resp = requests.request(method, url, headers=self.headers,
                                 json=data, timeout=30)
         if resp.status_code >= 400:
-            print(f"  {term.err('ERROR')}: {method} {url} -> {resp.status_code}")
-            print(term.dim(f"  {resp.text[:500]}"))
-            raise RuntimeError(f"BookStack API error: {resp.status_code}")
+            raise BookStackAPIError(method, url, resp.status_code, resp.text)
         return resp.json() if resp.text else {}
 
     def _request_multipart(self, method: str, path: str,
@@ -64,9 +77,7 @@ class BookStackClient:
         resp = requests.request(method, url, headers=headers,
                                 data=data, files=files, timeout=60)
         if resp.status_code >= 400:
-            print(f"  {term.err('ERROR')}: {method} {url} -> {resp.status_code}")
-            print(term.dim(f"  {resp.text[:500]}"))
-            raise RuntimeError(f"BookStack API error: {resp.status_code}")
+            raise BookStackAPIError(method, url, resp.status_code, resp.text)
         return resp.json() if resp.text else {}
 
     def _get_all(self, path: str) -> list:
@@ -97,8 +108,7 @@ class BookStackClient:
 
     def create_book(self, name: str, description: str = "") -> dict:
         if self.dry_run:
-            print(f"  [dry-run] Would create book: {name}")
-            return {"id": -1, "name": name}
+            return {"id": -1, "name": name, "_dry_run": True}
         self._log(f"Creating book: {name}")
         book = self._request("POST", "books",
                              {"name": name, "description": description})
@@ -124,8 +134,8 @@ class BookStackClient:
     def create_chapter(self, book_id: int, name: str,
                        description: str = "") -> dict:
         if self.dry_run:
-            print(f"  [dry-run] Would create chapter: {name}")
-            return {"id": -1, "name": name, "book_id": book_id}
+            return {"id": -1, "name": name, "book_id": book_id,
+                    "_dry_run": True}
         self._log(f"Creating chapter: {name} in book {book_id}")
         ch = self._request("POST", "chapters", {
             "book_id": book_id, "name": name, "description": description,
@@ -166,9 +176,7 @@ class BookStackClient:
                     book_id: int = None, chapter_id: int = None,
                     tags: list = None) -> dict:
         if self.dry_run:
-            target = f"chapter {chapter_id}" if chapter_id else f"book {book_id}"
-            print(f"  [dry-run] Would create page: {name} in {target}")
-            return {"id": -1, "name": name}
+            return {"id": -1, "name": name, "_dry_run": True}
         payload = {"name": name, "markdown": markdown}
         if chapter_id:
             payload["chapter_id"] = chapter_id
@@ -187,8 +195,7 @@ class BookStackClient:
         the page's location unchanged.
         """
         if self.dry_run:
-            print(f"  [dry-run] Would update page {page_id}: {name}")
-            return {"id": page_id, "name": name}
+            return {"id": page_id, "name": name, "_dry_run": True}
         payload = {"name": name, "markdown": markdown}
         if tags:
             payload["tags"] = tags
@@ -204,10 +211,10 @@ class BookStackClient:
                      name: str = None) -> dict:
         """Upload an image to the page's gallery. Returns image object with url."""
         if self.dry_run:
-            print(f"  [dry-run] Would upload image: {image_path.name} → "
-                  f"page {page_id}")
-            return {"id": -1, "url": f"(dry-run:{image_path.name})",
-                    "path": f"/uploads/images/gallery/dry-run/{image_path.name}"}
+            return {"id": -1,
+                    "url": f"(dry-run:{image_path.name})",
+                    "path": f"/uploads/images/gallery/dry-run/{image_path.name}",
+                    "_dry_run": True}
         display_name = name or image_path.stem
         mime = mimetypes.guess_type(str(image_path))[0] or "image/png"
         with open(image_path, "rb") as f:
@@ -231,8 +238,9 @@ class BookStackClient:
         routes to the update handler while still parsing the multipart body.
         """
         if self.dry_run:
-            print(f"  [dry-run] Would replace image {image_id}: {image_path.name}")
-            return {"id": image_id, "url": f"(dry-run:{image_path.name})"}
+            return {"id": image_id,
+                    "url": f"(dry-run:{image_path.name})",
+                    "_dry_run": True}
         display_name = name or image_path.stem
         mime = mimetypes.guess_type(str(image_path))[0] or "image/png"
         with open(image_path, "rb") as f:
@@ -251,7 +259,6 @@ class BookStackClient:
 
     def delete_image(self, image_id: int):
         if self.dry_run:
-            print(f"  [dry-run] Would delete image {image_id}")
             return
         self._request("DELETE", f"image-gallery/{image_id}")
 
@@ -261,9 +268,8 @@ class BookStackClient:
                           name: str = None) -> dict:
         """Upload a file attachment to a page."""
         if self.dry_run:
-            print(f"  [dry-run] Would upload attachment: {file_path.name} → "
-                  f"page {page_id}")
-            return {"id": -1, "name": name or file_path.name}
+            return {"id": -1, "name": name or file_path.name,
+                    "_dry_run": True}
         display_name = name or file_path.name
         mime = (mimetypes.guess_type(str(file_path))[0]
                 or "application/octet-stream")
@@ -287,9 +293,8 @@ class BookStackClient:
         routes to the update handler while still parsing the multipart body.
         """
         if self.dry_run:
-            print(f"  [dry-run] Would replace attachment {attachment_id}: "
-                  f"{file_path.name}")
-            return {"id": attachment_id, "name": name or file_path.name}
+            return {"id": attachment_id, "name": name or file_path.name,
+                    "_dry_run": True}
         display_name = name or file_path.name
         mime = (mimetypes.guess_type(str(file_path))[0]
                 or "application/octet-stream")
@@ -309,17 +314,16 @@ class BookStackClient:
 
     def delete_attachment(self, attachment_id: int):
         if self.dry_run:
-            print(f"  [dry-run] Would delete attachment {attachment_id}")
             return
         self._request("DELETE", f"attachments/{attachment_id}")
 
     # ─── Health ───
 
     def verify_connection(self) -> bool:
-        """Test that the API credentials work."""
+        """Test that the API credentials work. Silent — callers that want
+        to report the failure should catch BookStackAPIError themselves."""
         try:
             self._request("GET", "books?count=1")
             return True
-        except Exception as e:
-            print(f"Connection failed: {e}")
+        except Exception:
             return False
