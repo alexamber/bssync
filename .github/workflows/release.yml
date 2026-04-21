@@ -53,7 +53,12 @@ jobs:
             --collect-all pydantic \
             --hidden-import bssync.sync \
             --hidden-import bssync.discovery \
-            --hidden-import bssync.mcp_server \
+            --hidden-import bssync.mcp.server \
+            --hidden-import bssync.mcp.tools.sync \
+            --hidden-import bssync.mcp.tools.live_read \
+            --hidden-import bssync.mcp.tools.live_write \
+            --hidden-import bssync.mcp.resources \
+            --hidden-import bssync.mcp.prompts \
             src/bssync/_mcp_entry.py
 
       - name: Smoke test binaries

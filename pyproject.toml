@@ -45,7 +45,7 @@ mcp = [
 
 [project.scripts]
 bssync = "bssync.cli:main"
-bssync-mcp = "bssync.mcp_server:main"
+bssync-mcp = "bssync.mcp.server:main"
 
 [project.urls]
 Homepage = "https://github.com/alexamber/bssync"
