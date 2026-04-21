@@ -37,6 +37,21 @@ def test_missing_file_but_env_vars_set_succeeds(tmp_path: Path, monkeypatch):
     assert cfg["publish"] == []
 
 
+def test_empty_string_path_treated_as_unset(monkeypatch):
+    """DXT clients substitute empty strings for unfilled optional
+    user_config fields, which arrive as BSSYNC_CONFIG="". Path("")
+    stringifies to '.' and would otherwise be opened as a directory —
+    confirm load_config treats empty/whitespace paths as "no config
+    file" and falls through to the env-only branch."""
+    monkeypatch.setenv("BOOKSTACK_URL", "https://x")
+    monkeypatch.setenv("BOOKSTACK_TOKEN_ID", "i")
+    monkeypatch.setenv("BOOKSTACK_TOKEN_SECRET", "s")
+    for empty in ("", "   ", "\t"):
+        cfg = load_config(empty)
+        assert cfg["bookstack"]["url"] == "https://x"
+        assert cfg["publish"] == []
+
+
 def test_yaml_url_only_with_env_tokens(tmp_path: Path, monkeypatch):
     path = _write_config(
         tmp_path / "cfg.yaml",

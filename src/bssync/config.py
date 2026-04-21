@@ -33,8 +33,12 @@ def load_config(path: str) -> dict:
     env_token_id = os.environ.get("BOOKSTACK_TOKEN_ID")
     env_token_secret = os.environ.get("BOOKSTACK_TOKEN_SECRET")
 
-    p = Path(path)
-    if p.exists():
+    # Treat empty/whitespace as "unset". DXT clients substitute empty
+    # strings for unfilled optional user_config fields, and Path("")
+    # stringifies to '.' — without this guard, we'd try to open the cwd
+    # as a file and crash with IsADirectoryError.
+    p = Path(path) if path and path.strip() else None
+    if p is not None and p.is_file():
         with open(p) as f:
             config = yaml.safe_load(f) or {}
     elif env_url and env_token_id and env_token_secret:

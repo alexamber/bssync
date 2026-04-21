@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-04-21
+
+### Fixed
+- **MCP server crashed on `BSSYNC_CONFIG=""`**. DXT clients substitute empty strings for unfilled optional `user_config` fields, which arrived as the literal env var `BSSYNC_CONFIG=""`. Python's `Path("")` stringifies as `.` and `.exists()` returns True because cwd exists — `load_config` then tried to `open(".")` and crashed with `[Errno 21] Is a directory: '.'`, leaving the server up but with `config_error` set so every tool returned `config_invalid`. Now empty/whitespace paths are treated as unset and the env-only branch kicks in.
+
 ## [0.3.1] - 2026-04-21
 
 ### Fixed
