@@ -21,6 +21,8 @@ brew install bssync
 
 ```bash
 pip install bssync
+# with the MCP server for Claude Desktop / terminal:
+pip install 'bssync[mcp]'
 # or direct from GitHub (pre-PyPI):
 pip install git+https://github.com/alexamber/bssync.git
 ```
@@ -189,6 +191,101 @@ Typical workflow:
 2. **Discover** — `bssync ls --missing` to see untracked pages
 3. **Track new pages** — `bssync pull --new --book X` prints YAML snippets to paste into `publish:`
 4. **Day-to-day** — edit locally → `bssync push`; someone edits on BookStack → `bssync pull`
+
+---
+
+## MCP server (Claude Desktop, Claude Code & terminal)
+
+bssync ships a Model Context Protocol server so Claude (Desktop, Claude Code, or any MCP client) can sync, browse, and author BookStack pages directly. It reuses the same `bookstack.yaml` — no second config.
+
+**Install options:**
+
+```bash
+# Standalone binary (no Python needed) — download the bssync-mcp-*.tar.gz
+# for your platform from https://github.com/alexamber/bssync/releases,
+# extract, and place `bssync-mcp/bssync-mcp` on your PATH.
+
+# Or via pip (bundles the mcp SDK):
+pip install 'bssync[mcp]'
+# isolated:
+pipx install 'bssync[mcp]'
+```
+
+**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS, `%APPDATA%\Claude\claude_desktop_config.json` on Windows):
+
+```json
+{
+  "mcpServers": {
+    "bssync": {
+      "command": "bssync-mcp",
+      "env": {
+        "BSSYNC_CONFIG": "/absolute/path/to/bookstack.yaml",
+        "BOOKSTACK_TOKEN_ID": "xxx",
+        "BOOKSTACK_TOKEN_SECRET": "yyy"
+      }
+    }
+  }
+}
+```
+
+**Claude Code** — one command:
+
+```bash
+claude mcp add bssync bssync-mcp \
+  -e BSSYNC_CONFIG=/absolute/path/to/bookstack.yaml \
+  -e BOOKSTACK_TOKEN_ID=xxx \
+  -e BOOKSTACK_TOKEN_SECRET=yyy
+```
+
+Then `claude mcp list` to verify, and it's available in every Claude Code session.
+
+Put secrets in the `env:` block (or `-e` flags) rather than the yaml file — the env vars override the config, so you can keep `token_id`/`token_secret` blank in a shared/checked-in config. `BSSYNC_CONFIG` **must be absolute** because Claude Desktop/Code launch the server from an unspecified working directory.
+
+**No yaml at all (pure env config):** if you set `BOOKSTACK_URL`, `BOOKSTACK_TOKEN_ID`, and `BOOKSTACK_TOKEN_SECRET`, the server runs without `bookstack.yaml`. You lose `push`/`pull` (those need a `publish:` list), but every other tool works — ideal for MCP-only usage.
+
+`publish:` is optional in the config when you only want live/read-only usage — leave it blank and you still get `ls`, `search_pages`, `get_page`, and the live write tools.
+
+**Terminal (MCP Inspector)** — for debugging or trying out the server:
+
+```bash
+BSSYNC_CONFIG=/abs/path/bookstack.yaml npx -y @modelcontextprotocol/inspector bssync-mcp
+```
+
+### Tools
+
+**Sync** — mirrors the CLI, runs against the config's `publish:` list:
+
+| Tool | Notes |
+|------|-------|
+| `verify` | API reachability check |
+| `push` | Conflicts return `status: skipped` with a reason; retry with `force: true` (no TTY prompts in MCP mode) |
+| `pull` | Non-interactive: entries that differ from remote are reported, not overwritten |
+| `ls` | Full tree with `tracked: true/false` per page |
+| `discover` | Returns untracked pages + ready-to-paste YAML snippets |
+
+**Live (read-only)** — work with BookStack directly, no local files needed:
+
+| Tool | Notes |
+|------|-------|
+| `list_books` / `list_chapters` / `list_pages_in` | Navigation |
+| `search_pages(query)` | BookStack full-text search |
+| `get_page(page_id)` | Returns markdown + `content_hash` for optimistic concurrency |
+
+**Live (write)** — guarded to prevent desyncing tracked content:
+
+| Tool | Guardrail |
+|------|-----------|
+| `create_page(book, title, markdown, chapter?)` | Refuses if `(book, title)` matches a config entry |
+| `update_page(page_id, markdown, title?, expected_hash?)` | Refuses if the page is tracked; optional `expected_hash` from `get_page` blocks stomping concurrent edits |
+
+The guardrail exists because local markdown is the source of truth for tracked pages — letting Claude write to them live would silently invalidate the sync state. For tracked pages, edit the local file and call `push` instead.
+
+### Roadmap
+
+- Homebrew formula for the `bssync-mcp` binary (currently CLI-only).
+- Claude Desktop `.dxt` extension bundle for one-click install.
+- MCP `resources` and `prompts` primitives — expose `bookstack://page/{id}` as a resource and ship a few prompt templates.
+- Optional full live-write mode for tracked pages (with conflict detection via the `content_hash` tag), behind a config flag. Today, writes to tracked pages are refused.
 
 ---
 

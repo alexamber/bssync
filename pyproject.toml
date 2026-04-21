@@ -39,9 +39,13 @@ dev = [
 build = [
     "pyinstaller>=6.0",
 ]
+mcp = [
+    "mcp>=1.2",
+]
 
 [project.scripts]
 bssync = "bssync.cli:main"
+bssync-mcp = "bssync.mcp_server:main"
 
 [project.urls]
 Homepage = "https://github.com/alexamber/bssync"

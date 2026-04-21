@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **MCP server** (`bssync-mcp`) — Model Context Protocol server for Claude Desktop, Claude Code, and any MCP-compatible client. Install via `pip install 'bssync[mcp]'` or download the standalone `bssync-mcp-*.tar.gz` from GitHub Releases (no Python required on the host). Exposes 12 tools: sync (`verify`, `push`, `pull`, `ls`, `discover`), read-only live access (`list_books`, `list_chapters`, `list_pages_in`, `search_pages`, `get_page`), and guarded live writes (`create_page`, `update_page`). Live writes refuse pages tracked in the config's `publish:` list — those must go through the local files + `push` flow — preserving bssync's "local markdown is the source of truth" invariant.
+- **`BOOKSTACK_URL` env var** and config-less operation. When `BOOKSTACK_URL` + `BOOKSTACK_TOKEN_ID` + `BOOKSTACK_TOKEN_SECRET` are set, `bookstack.yaml` becomes optional — ideal for MCP server usage where all config comes from Claude Desktop / Claude Code's `env:` block. Push/pull need a `publish:` list and so still require a yaml file; live and read-only MCP tools work without one.
+- **`bssync-mcp --version`** — version flag that short-circuits config loading, so install verification works without credentials.
+- **Standalone `bssync-mcp` binary** in GitHub Releases (`bssync-mcp-macos-arm64.tar.gz`, `bssync-mcp-linux-x86_64.tar.gz`) built via PyInstaller `--onedir` alongside the existing `bssync` binary.
+- `BookStackClient.search()` — public search API, consumed by the MCP `search_pages` tool.
+
+### Fixed
+- `push` now preserves user-added tags on BookStack pages (labels, categories, anything from the BookStack UI). Previously every push replaced the full tag set with only bssync-managed tags, silently wiping the rest.
+- Image and attachment replacement (`update_image`, `update_attachment`) now works on BookStack instances that don't accept `PUT` with multipart — falls back to `POST` with `_method=PUT` override.
+- Attachment and image content changes are now properly reconciled on push — content-hash drift no longer causes spurious "UNCHANGED" reports when binary content differs.
+
 ## [0.2.1] - 2026-04-20
 
 ### Fixed

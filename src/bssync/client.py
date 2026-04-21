@@ -153,6 +153,15 @@ class BookStackClient:
     def get_page(self, page_id: int) -> dict:
         return self._request("GET", f"pages/{page_id}")
 
+    def search(self, query: str, type: str = "page", count: int = 20) -> list:
+        """Full-text search. Returns raw search hits (with book_id,
+        chapter_id, url, preview_html, etc.).
+        """
+        q = requests.utils.quote(query)
+        resp = self._request("GET",
+                             f"search?query={q}&type={type}&count={count}")
+        return resp.get("data", [])
+
     def create_page(self, name: str, markdown: str,
                     book_id: int = None, chapter_id: int = None,
                     tags: list = None) -> dict:
