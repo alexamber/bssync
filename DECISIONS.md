@@ -106,3 +106,20 @@ Lightweight ADRs for decisions that shape bssync's design. Each entry explains t
 - For users without Python: GitHub Release includes PyInstaller-built single-file binaries for macOS and Linux.
 
 **Why:** Python users expect pip-based installs. Non-Python users expect "download a binary and run it." Both audiences exist. PyInstaller binaries are larger (~15MB) but require zero dependencies on the target machine.
+
+---
+
+## 11. MCP server as a separate script behind an optional extra
+
+**Decision:** The Model Context Protocol server ships as `bssync-mcp` (second entry in `[project.scripts]`), with the `mcp` SDK gated behind a `[project.optional-dependencies].mcp` extra. Install with `pip install 'bssync[mcp]'`. The server lives in `src/bssync/mcp_server.py` and wraps the existing `publish_entry`/`pull_entry`/`list_all_pages` orchestrators — no business logic is duplicated.
+
+**Alternatives considered:**
+- Add `mcp` as a core dependency — violates [ADR 6](#6-two-runtime-dependencies-only). The core CLI has no use for it.
+- Ship the MCP server as a separate package (`bssync-mcp`) — more moving parts, version-skew risk between the CLI and the MCP tools wrapping its orchestrators.
+- Use the low-level `mcp.Server` API — more boilerplate; `FastMCP` decorators give type-hint → JSON schema for free with no expressiveness loss for this surface.
+
+**Why:** The MCP server is a thin facade; it benefits from being in the same package as the orchestrators it calls (no version skew, same release, same normalization rules). The optional extra means Python CLI users don't pay for the MCP SDK, and the constraint from ADR 6 holds for the core.
+
+**Live write guardrail:** `create_page` / `update_page` refuse pages tracked in the config's `publish:` list. Local markdown is the source of truth for tracked content (see [ADR 1](#1-state-lives-on-bookstack-not-locally)); letting an LLM write to a tracked page live would invalidate the `content_hash` tag and silently desync. Read-only live tools (`get_page`, `search_pages`, `list_*`) are unrestricted. A future "option C" — full live writes with automatic tag reconciliation — is possible once we understand usage patterns, tracked in [BACKLOG.md](docs/BACKLOG.md).
+
+**Stdio hygiene:** The existing orchestrators `print()` progress to stdout, but stdout is the MCP protocol channel — stray prints would corrupt the stream. `mcp_server.py` wraps every tool call in `contextlib.redirect_stdout` and returns captured output as `_log` in the structured result. On exception, the log is flushed to stderr so operators can diagnose failures.

@@ -66,6 +66,34 @@ def build_parser() -> argparse.ArgumentParser:
     comp.add_argument("shell", choices=["bash", "zsh", "fish"],
                       help="Target shell")
 
+    mcp = subs.add_parser("mcp",
+                          help="MCP server helpers (install, configure)")
+    mcp_subs = mcp.add_subparsers(dest="mcp_command", required=True)
+    mcp_install = mcp_subs.add_parser(
+        "install",
+        help="Register the bssync MCP server with Claude Code / Desktop")
+    mcp_install.add_argument(
+        "--target",
+        choices=["auto", "code", "desktop", "both", "print"],
+        default="auto",
+        help="Which client to install into. "
+             "`auto` detects and prompts if both are present; "
+             "`print` just emits config snippets.")
+    mcp_install.add_argument("--url",
+                             help="BookStack URL (else prompted or from "
+                                  "BOOKSTACK_URL)")
+    mcp_install.add_argument("--token-id", dest="token_id",
+                             help="API token ID (else prompted or from "
+                                  "BOOKSTACK_TOKEN_ID)")
+    mcp_install.add_argument("--token-secret", dest="token_secret",
+                             help="API token secret (else prompted or "
+                                  "from BOOKSTACK_TOKEN_SECRET)")
+    mcp_install.add_argument("--config-file", dest="config_file",
+                             help="Optional bookstack.yaml path for "
+                                  "push/pull support")
+    mcp_install.add_argument("--non-interactive", action="store_true",
+                             help="Skip prompts; require flags/env vars")
+
     return parser
 
 
@@ -82,6 +110,15 @@ def main():
         from bssync.completions import cmd_completions
         cmd_completions(args.shell)
         return
+
+    # `mcp install` configures the MCP server against Claude clients; it
+    # does its own connection verification and shouldn't need a
+    # bookstack.yaml to exist first.
+    if args.command == "mcp":
+        if args.mcp_command == "install":
+            from bssync.mcp_install import cmd_mcp_install
+            sys.exit(cmd_mcp_install(args))
+        return  # argparse enforces a subcommand via required=True
 
     config_path = Path(args.config)
 
